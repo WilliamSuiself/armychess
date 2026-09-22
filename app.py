@@ -12,6 +12,7 @@ from flask import Flask, jsonify, render_template, request
 
 from game import (
     IMMOVABLE,
+    RANK,
     ROWS,
     COLS,
     TERRAIN,
@@ -198,7 +199,23 @@ def build_move_choice_criteria(game, moves):
         label = f"{piece['type']}({fp[0]},{fp[1]}) → ({tp[0]},{tp[1]})"
 
         if target_piece and target_piece["owner"] == "player":
-            label += " [attack]"
+            # Annotate what is KNOWN or DEDUCED about the defender so Jev can
+            # avoid suicidal attacks — without this the options all look the
+            # same and it will happily feed a 排长 into a revealed 司令.
+            known = game["revealed_to"]["ai"].get(f"{tp[0]},{tp[1]}")
+            if known and (known in RANK or known in IMMOVABLE or known == "炸弹"):
+                predicted = battle(piece["type"], known)[0]
+                tag = {
+                    "attacker_wins": "必胜",
+                    "defender_wins": "必死",
+                    "both_die": "同归于尽",
+                    "flag_taken_player": "夺旗获胜!",
+                }.get(predicted, predicted)
+                label += f" [attack: vs {known} → {tag}]"
+            elif known:
+                label += f" [attack: vs deduced {known}]"
+            else:
+                label += " [attack: vs ?]"
         else:
             label += " [move]"
 

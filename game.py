@@ -187,7 +187,8 @@ def battle(attacker_type, defender_type):
     if defender_type == "地雷":
         if attacker_type == "工兵":
             return "attacker_wins", defender_type
-        return "both_die", defender_type
+        # Mines are permanent barriers: the attacker dies, the mine stays.
+        return "defender_wins", defender_type
     if attacker_type == "地雷":
         return "both_die", attacker_type  # guard; mines can't actually attack
 
@@ -203,26 +204,33 @@ def _bound_hint(attacker_type, outcome):
     """Deduction about an unseen defender after the attacker died — a bound
     marker shown on that enemy piece instead of a false exact type.
 
-    Note: in this game a 地雷 destroys the attacker AND itself (both_die),
-    so mines can never produce defender_wins.
+    Mines are permanent barriers here: they survive every non-engineer
+    attack (defender_wins), so a surviving defender is either a mine or a
+    higher-ranked piece.
 
-    defender_wins — defender strictly outranks the attacker, guaranteed a
-    real combat piece (mines and bombs always end in mutual destruction):
-      - 工兵 → "非地雷" (it beat an engineer, so it's a combat piece)
-      - other X → ">X" (outranks X)
-    both_die — defender is dead too:
-      - 工兵 → "工兵或炸弹" (engineers defuse mines; only a bomb or a fellow
-        engineer can kill one)
-      - 炸弹 → None (a bomb dies to anything — no information gained)
-      - other X → "同级/雷/弹" (equal rank, a mine, or a bomb)
+    defender_wins:
+      - 司令 → "地雷" (only a mine can stop it — nothing outranks it, and a
+        bomb would be mutual destruction)
+      - 工兵 → "非地雷" (engineers defuse mines, and bombs are mutual
+        destruction — so it must be a combat piece)
+      - other X → ">X或雷" (outranks X, or a mine)
+    both_die:
+      - 工兵 → "工兵或炸弹" (only a bomb or a fellow engineer kills one)
+      - 炸弹 → None (a bomb dies to anything — no information)
+      - other X → "同级或炸弹" (equal rank or a bomb — mines survive, so a
+        mine can never be involved in mutual destruction)
     """
     if outcome == "defender_wins":
-        return "非地雷" if attacker_type == "工兵" else f">{attacker_type}"
+        if attacker_type == "司令":
+            return "地雷"
+        if attacker_type == "工兵":
+            return "非地雷"
+        return f">{attacker_type}或雷"
     if attacker_type == "工兵":
         return "工兵或炸弹"
     if attacker_type == "炸弹":
         return None
-    return "同级/雷/弹"
+    return "同级或炸弹"
 
 
 # === Preset formations =================================================
@@ -938,7 +946,8 @@ RANKS (higher beats lower): 司令(9) > 军长(8) > 师长(7) > 旅长(6) > 团�
 
 SPECIAL PIECES:
 - 军旗: immovable, sits in one of your 2 HQ squares. Moving onto the enemy flag wins instantly.
-- 地雷: immovable. Kills any attacker except 工兵 (engineer), who defuses it and survives.
+- 地雷: immovable PERMANENT barrier — any attacker except 工兵 dies and the mine STAYS
+  on the board (defender_wins). Only 工兵 removes it (defuses it and survives).
 - 炸弹: destroys itself AND any piece it touches, attacking or defending.
 
 BATTLE: higher rank kills lower (winner takes the square); equal ranks both die.
@@ -966,10 +975,10 @@ always learns the attacker's type — a surviving attacker stays marked even aft
 later — while the attacker identifies the defender only if it wins the square. Listed in
 enemy_pieces_revealed. Never feed a weaker piece into a revealed stronger enemy; check
 ranks before choosing an [attack] option. A revealed entry can also be a DEDUCTION shown
-when your attacking piece died: ">X" = the defender outranks your X (defender_wins means
-it is a real combat piece — mines and bombs always end in mutual destruction); "非地雷" =
-it beat your 工兵, so it is a combat piece; "同级/雷/弹" = mutual destruction with a
-non-engineer, so it was equal rank, a mine, or a bomb.
+when your attacking piece died: ">X或雷" = the defender outranks your X or is a mine
+(both kill and stay); "地雷" = it stopped your 司令, which only a mine can do; "非地雷" =
+it beat your 工兵, so it is a combat piece; "同级或炸弹" = mutual destruction means equal
+rank or a bomb (a mine survives attacks, so it is never the mutual-destruction defender).
 
 FLAG INTELLIGENCE:
 - HQ deduction: the flag can never leave its HQ. If a piece moves onto one enemy HQ and the
