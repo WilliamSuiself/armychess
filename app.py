@@ -24,6 +24,7 @@ from game import (
     execute_move,
     full_board_view,
     in_bounds,
+    tactical_override,
     movable_pieces,
     new_game,
     new_game_for_setup,
@@ -468,7 +469,19 @@ def ai_move():
     game["awaiting_ai"] = False
 
     response = {"ok": True}
-    ai_decision = jev_choose_ai_move(ctx)
+    # Tactical priorities outrank the model: take the enemy flag if possible,
+    # else save our own flag from an immediate capture threat.
+    override = tactical_override(game, "ai")
+    if override:
+        ofp, otp, reason = override
+        ai_decision = {
+            "ok": True, "from": list(ofp), "to": list(otp),
+            "purpose": reason, "confidence": 1.0,
+            "aggression": 4, "take_risk": 0, "win_conf": 1.0,
+            "probabilities": {}, "override": True,
+        }
+    else:
+        ai_decision = jev_choose_ai_move(ctx)
     if ai_decision.get("ok"):
         game["last_ai_probs"] = ai_decision
         ai_result = execute_move(game, "ai",

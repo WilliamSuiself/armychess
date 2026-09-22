@@ -200,20 +200,87 @@ def battle(attacker_type, defender_type):
     return "both_die", defender_type
 
 
-def _bound_hint(attacker_type, outcome):
+def tactical_override(game, owner):
+    """Hard-coded tactical priorities that outrank any model judgement:
+      1. flag_win — an enemy 军旗 is capturable this turn: take it (the game
+         ends instantly; nothing else matters).
+      2. flag_defense — an enemy piece can capture OUR flag next turn:
+         capture that threat now, preferring a predicted win, then a bomb
+         trade, then the strongest available piece.
+    Returns (from_pos, to_pos, reason) or None."""
+    opponent = "ai" if owner == "player" else "player"
+
+    for fp in movable_pieces(game, owner):
+        for tp in possible_moves(game, owner, fp):
+            t = game["board"].get(tp)
+            if t and t["owner"] == opponent and t["type"] == "军旗":
+                return fp, tp, "flag_win"
+
+    flag_pos = next((p for p, pc in game["board"].items()
+                     if pc["owner"] == owner and pc["type"] == "军旗"
+                     and pc["alive"]), None)
+    if flag_pos is None:
+        return None
+
+    threats = [ep for ep, pc in game["board"].items()
+               if pc["owner"] == opponent and pc["alive"]
+               and flag_pos in possible_moves(game, opponent, ep)]
+    if not threats:
+        return None
+
+    known = game["revealed_to"][owner]
+    best = None
+    for threat in threats:
+        tkey = f"{threat[0]},{threat[1]}"
+        threat_known = known.get(tkey)
+        for fp in movable_pieces(game, owner):
+            if threat not in possible_moves(game, owner, fp):
+                continue
+            piece = game["board"][fp]
+            if threat_known and (threat_known in RANK or
+                                 threat_known in IMMOVABLE or threat_known == "炸弹"):
+                outcome = battle(piece["type"], threat_known)[0]
+                score = {"attacker_wins": 3, "flag_taken_player": 3,
+                         "both_die": 2}.get(outcome, 0)
+            else:
+                # Unknown threat: a bomb guarantees the trade; otherwise send
+                # the strongest available piece (small rank bonus breaks ties).
+                score = (2.0 if piece["type"] == "炸弹" else 1.0) \
+                    + RANK.get(piece["type"], 0) * 0.01
+            if best is None or score > best[0]:
+                best = (score, fp, threat)
+    if best:
+        return best[1], best[2], "flag_defense"
+    return None
+
+
+def _stronger_marker(existing, victim_type):
+    """Bound marker '>X' where X = the strongest piece this enemy has beaten
+    so far — a later weaker kill must not lower the known bound."""
+    vr = RANK.get(victim_type, 0)
+    if isinstance(existing, str) and existing.startswith(">"):
+        cur = existing[1:].split("或")[0]
+        if RANK.get(cur, -1) >= vr:
+            return existing
+    return f">{victim_type}"
+
+
+def _bound_hint(attacker_type, outcome, defender_pos=None, defender_side=None,
+                defender_moved=False):
     """Deduction about an unseen defender after the attacker died — a bound
     marker shown on that enemy piece instead of a false exact type.
 
     Mines are permanent barriers here: they survive every non-engineer
     attack (defender_wins), so a surviving defender is either a mine or a
-    higher-ranked piece.
+    higher-ranked piece — but only if it could physically be a mine (sits
+    in the defender's back two rows and has never moved).
 
     defender_wins:
       - 司令 → "地雷" (only a mine can stop it — nothing outranks it, and a
         bomb would be mutual destruction)
       - 工兵 → "非地雷" (engineers defuse mines, and bombs are mutual
         destruction — so it must be a combat piece)
-      - other X → ">X或雷" (outranks X, or a mine)
+      - other X → ">X或雷" when a mine is physically possible, else ">X"
     both_die:
       - 工兵 → "工兵或炸弹" (only a bomb or a fellow engineer kills one)
       - 炸弹 → None (a bomb dies to anything — no information)
@@ -225,7 +292,12 @@ def _bound_hint(attacker_type, outcome):
             return "地雷"
         if attacker_type == "工兵":
             return "非地雷"
-        return f">{attacker_type}或雷"
+        # A surviving defender is either a higher rank OR a mine — but a
+        # mine can only sit in the back two rows and can never move, so a
+        # defender anywhere else (or one that has moved) can't be a mine.
+        could_be_mine = (not defender_moved and defender_pos is not None
+                         and defender_pos[0] in MINE_ROWS[defender_side])
+        return f">{attacker_type}或雷" if could_be_mine else f">{attacker_type}"
     if attacker_type == "工兵":
         return "工兵或炸弹"
     if attacker_type == "炸弹":
@@ -774,23 +846,34 @@ def execute_move(game, owner, from_pos, to_pos):
     if target and target["alive"]:
         outcome, _ = battle(piece["type"], target["type"])
 
-        # The defender's side always learns exactly what attacked it. If the
-        # attacker survives, the marker stays on the fight square (and follows
-        # the piece when it later moves); if the attacker died, the marker
-        # goes on its origin square as pure history — attaching it to the
-        # defender's square would let it transfer onto the defender when the
-        # defender moves away.
-        atk_key = tkey if outcome in ("attacker_wins", "flag_taken_player") else fkey
-        game["revealed_to"][opponent][atk_key] = piece["type"]
+        # Symmetric hidden-info convention: the side that LOST a piece learns
+        # only that the survivor is stronger than what it killed — a ">X"
+        # bound marker, never the real name. A dead attacker, however, flips
+        # face-up: its exact type goes on its origin square as history
+        # (not the fight square — a marker there would wrongly transfer onto
+        # the defender when the defender later moves away).
+        if outcome in ("attacker_wins", "flag_taken_player"):
+            if target["type"] == "地雷":
+                marker = "工兵"      # only an engineer can remove a mine
+            else:
+                marker = _stronger_marker(
+                    game["revealed_to"][opponent].get(fkey), target["type"])
+            game["revealed_to"][opponent].pop(fkey, None)
+            game["revealed_to"][opponent][tkey] = marker
+        else:
+            game["revealed_to"][opponent][fkey] = piece["type"]
         # The attacker identifies the defender exactly only when it wins the
         # square; when its piece dies it still learns a bound/deduction —
-        # ">团长" = the defender outranks 团长, "非地雷" = an engineer only
-        # loses to real pieces, "同级/雷/弹" = mutual destruction means equal
-        # rank, a mine, or a bomb. None = a dead bomb taught us nothing.
+        # ">团长或雷" = defender outranks 团长 or is a mine (only while the
+        # piece could physically be a mine: back two rows + never moved),
+        # "地雷" = it stopped a 司令, "非地雷" = it beat an 工兵, "同级或炸弹"
+        # = mutual destruction means equal rank or a bomb.
         if outcome in ("attacker_wins", "flag_taken_player"):
             game["revealed_to"][owner][tkey] = target["type"]
         else:
-            hint = _bound_hint(piece["type"], outcome)
+            hint = _bound_hint(piece["type"], outcome,
+                               defender_pos=to_pos, defender_side=opponent,
+                               defender_moved=bool(target.get("has_moved")))
             if hint:
                 game["revealed_to"][owner][tkey] = hint
 
@@ -801,16 +884,18 @@ def execute_move(game, owner, from_pos, to_pos):
 
         if outcome == "attacker_wins":
             game["board"][to_pos] = piece
-            game["my_known"][owner][f"{to_pos[0]},{to_pos[1]}"] = piece["type"]
+            piece["has_moved"] = True
+            game["my_known"][owner][tkey] = piece["type"]
         elif outcome == "defender_wins":
             pass
         elif outcome == "both_die":
             if to_pos in game["board"]:
                 del game["board"][to_pos]
-            game["my_known"][owner][f"{to_pos[0]},{to_pos[1]}"] = None
+            game["my_known"][owner][tkey] = None
         elif outcome == "flag_taken_player":
             game["board"][to_pos] = piece
-            game["my_known"][owner][f"{to_pos[0]},{to_pos[1]}"] = piece["type"]
+            piece["has_moved"] = True
+            game["my_known"][owner][tkey] = piece["type"]
             game["winner"] = "player"
             game["phase"] = "ended"
         elif outcome == "flag_taken_ai":
@@ -824,15 +909,20 @@ def execute_move(game, owner, from_pos, to_pos):
             _reveal_flag_on_commander_down(game, opponent, event)
     else:
         game["board"][to_pos] = piece
+        piece["has_moved"] = True
         game["my_known"][owner][tkey] = piece["type"]
         # A revealed piece stays revealed when it MOVES — the opponent watched
         # it go. Clear stale memories at the destination first so a different
-        # piece's history can't mislabel the newcomer.
+        # piece's history can't mislabel the newcomer. A moved piece is also
+        # provably not a mine (mines never move), so drop any "或雷" suffix.
         opp_rev = game["revealed_to"][opponent]
         opp_rev.pop(tkey, None)
         game["revealed_to"][owner].pop(tkey, None)
         if opp_rev.get(fkey):
-            opp_rev[tkey] = opp_rev.pop(fkey)
+            mark = opp_rev.pop(fkey)
+            if isinstance(mark, str) and mark.endswith("或雷"):
+                mark = mark[:-2]
+            opp_rev[tkey] = mark
 
     # HQ deduction: stepping onto one enemy HQ without winning means the flag
     # was not there — and since the flag never leaves its HQ, it must be in
@@ -970,15 +1060,24 @@ square; cannot attack into a camp. Flag and mines never move.
 
 WIN: capture the enemy 军旗, or leave the enemy with no legal move.
 
+PRIORITIES (highest first):
+  1. If any move captures the enemy 军旗 this turn, ALWAYS take it — it wins instantly.
+  2. If an enemy piece can capture YOUR 军旗 next turn, capture that piece now.
+  3. Everything else is normal strategy.
+
 HIDDEN INFO: enemy types are hidden until combat. When pieces collide, the DEFENDER'S side
 always learns the attacker's type — a surviving attacker stays marked even after it moves
 later — while the attacker identifies the defender only if it wins the square. Listed in
 enemy_pieces_revealed. Never feed a weaker piece into a revealed stronger enemy; check
 ranks before choosing an [attack] option. A revealed entry can also be a DEDUCTION shown
 when your attacking piece died: ">X或雷" = the defender outranks your X or is a mine
-(both kill and stay); "地雷" = it stopped your 司令, which only a mine can do; "非地雷" =
-it beat your 工兵, so it is a combat piece; "同级或炸弹" = mutual destruction means equal
-rank or a bomb (a mine survives attacks, so it is never the mutual-destruction defender).
+(a mine only stays possible while that piece sits in its back rows and has never moved —
+once it moves the marker drops to ">X"); "地雷" = it stopped your 司令, which only a mine
+can do; "非地雷" = it beat your 工兵, so it is a combat piece; "同级或炸弹" = mutual
+destruction means equal rank or a bomb (a mine survives attacks, so it is never the
+mutual-destruction defender). A plain ">X" marker (no 或雷) on a live enemy means it
+killed your X and survived — strictly stronger than X, and provably a mobile combat
+piece, never a mine.
 
 FLAG INTELLIGENCE:
 - HQ deduction: the flag can never leave its HQ. If a piece moves onto one enemy HQ and the
