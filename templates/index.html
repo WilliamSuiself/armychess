@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>军棋 × Jev · Mind Duel</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🧠 军棋 × Jev · Mind Duel</h1>
+    <div class="subtitle">你 vs Jev-powered AI — 看你能不能读懂 AI 在想什么</div>
+  </header>
+
+  <main>
+    <section class="board-section">
+      <div class="board" id="board"></div>
+      <div class="legend">
+        <span class="leg own"><b>我方</b></span>
+        <span class="leg enemy"><b>对方</b></span>
+        <span class="leg revealed">已揭示</span>
+        <span class="leg movable">可走</span>
+        <span class="leg history">历史</span>
+        <button id="replay-btn" class="reset-btn" style="margin-left:6px">▶ 复盘</button>
+        <button id="reset" class="reset-btn">重新开始</button>
+      </div>
+      <div id="status" class="status">点击一个我方棋子开始</div>
+      <div id="exp-stats" class="exp-stats"></div>
+      <div id="replay-bar" class="replay-bar" style="display:none">
+        <button id="replay-prev" class="replay-btn">◀ 上一步</button>
+        <input id="replay-slider" type="range" min="0" max="0" value="0">
+        <button id="replay-next" class="replay-btn">下一步 ▶</button>
+        <button id="replay-exit" class="replay-btn exit">退出复盘</button>
+        <div id="replay-label" class="replay-label"></div>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <!-- Setup panel (visible only in setup phase) -->
+      <div id="setup-panel" class="setup-panel" style="display:none">
+        <h2>🛠️ 布置棋盘（25子）</h2>
+        <p class="hint">已自动摆好一套默认阵型，可直接开始，或先切换其他阵型 / 手动调整。<br>
+          切换阵型会整体替换当前摆法。<br>
+          手动调整：点击棋盘上的己方棋子可移除（棋子回到棋池），再从棋池选棋子点击空位放置。</p>
+        <h3>预设阵型（点击整体应用）</h3>
+        <div id="formations" class="formations"></div>
+        <div class="save-formation-row">
+          <input id="formation-name" type="text" placeholder="给当前布局起个名字…" maxlength="20">
+          <button id="save-formation-btn" class="save-btn">💾 保存为自定义阵型</button>
+        </div>
+        <div id="save-formation-status" class="save-formation-status"></div>
+        <h3>剩余棋子</h3>
+        <div id="pool" class="pool"></div>
+        <div id="setup-stats" class="setup-stats"></div>
+        <button id="setup-start" class="start-btn">开始游戏</button>
+      </div>
+
+      <!-- AI panel (visible only during play) -->
+      <div id="ai-panel" class="ai-panel">
+        <h2>🧠 AI 内心世界</h2>
+        <div id="ai-thinking" class="ai-empty">等待 AI 行动...</div>
+        <h3>Jev 输入 / 输出</h3>
+        <pre id="jev-io" class="jev-io">（AI 行动后显示提交给 Jev 的完整 state/questions 及其返回）</pre>
+      </div>
+    </aside>
+  </main>
+
+  <div class="bottom-row">
+    <section class="log-section">
+      <h3>战斗记录</h3>
+      <ul id="log" class="log"></ul>
+    </section>
+  </div>
+</div>
+
+<script src="/static/game.js"></script>
+</body>
+</html>
