@@ -53,22 +53,13 @@ let busy = false;
 // Setup mode state
 let setupPieceType = null;  // currently selected piece from pool
 
-// Replay: snapshots of every board state this session, so the player can
-// step back through the game afterwards.
-let historyFrames = [];   // [{board, label}]
+// Replay: full-visibility board frames recorded server-side per move and
+// persisted to disk (army-chess/replays/<game_id>.json), so a replay shows
+// every piece's real type and survives page refresh / server restart.
+let historyFrames = [];   // [{board, label, turn}] — fetched from /api/replay
 let replayMode = false;
 let replayIdx = 0;
-
-function recordFrame(board, label) {
-  historyFrames.push({ board: JSON.parse(JSON.stringify(board)), label });
-}
-
-function eventLabel(actor, ev) {
-  const who = actor === "player" ? "玩家" : "AI";
-  let t = `${who} (${ev.from[0]},${ev.from[1]})→(${ev.to[0]},${ev.to[1]})`;
-  if (ev.combat) t += ` 战斗:${formatOutcome(ev.outcome)}`;
-  return t;
-}
+let replayTimer = null;
 
 const boardEl = document.getElementById("board");
 const aiEl = document.getElementById("ai-thinking");
@@ -149,10 +140,6 @@ async function refresh() {
   if (!replayMode) renderBoard(r.board);
   renderSidePanel(r);
   renderExperience();
-  // First playing-phase board = the opening frame for replays.
-  if (r.phase === "playing" && historyFrames.length === 0) {
-    recordFrame(r.board, "开局");
-  }
   if (r.winner) {
     renderWinner(r.winner);
   }
@@ -435,7 +422,6 @@ async function submitMove(from, to) {
       setStatus("结算中...");
       await animateMove(from, to, movingIcon, !!r.event.combat);
       appendLog(formatEvent("player", r.event));
-      recordFrame(r.board, eventLabel("player", r.event));
     }
 
     state = r;
@@ -481,7 +467,6 @@ async function fetchAiMove() {
     await animateMove(am.event.from, am.event.to, aiIcon, !!am.event.combat);
     appendLog(formatAIMove(am.decision, am.event));
     renderBoard(r.board);
-    recordFrame(r.board, eventLabel("ai", am.event));
     flashCell(am.event.to);   // keep the AI's landing square lit so it's
                               // obvious which enemy piece just moved
     renderAIDecision(am.decision);
@@ -687,17 +672,19 @@ function renderJevIO(io) {
 
 // === Replay ===
 
-function enterReplay() {
-  if (!historyFrames.length) {
+async function enterReplay() {
+  const r = await apiFetch("/api/replay").then(r => r.json()).catch(() => null);
+  if (!r || !r.frames || !r.frames.length) {
     setStatus("本局还没有可回放的着法");
     return;
   }
+  historyFrames = r.frames;
   replayMode = true;
-  replayIdx = historyFrames.length - 1;
+  replayIdx = 0;                       // always start from the first move
   replayBar.style.display = "flex";
   replaySlider.max = historyFrames.length - 1;
   showReplayFrame();
-  setStatus("复盘模式：拖动滑块或按上一步/下一步");
+  setStatus("复盘模式：双方棋子全部翻开，可拖动滑块/步进/自动播放");
 }
 
 function showReplayFrame() {
@@ -708,7 +695,33 @@ function showReplayFrame() {
   replayLabel.textContent = `${replayIdx + 1}/${historyFrames.length} · ${f.label}`;
 }
 
+function stopAutoplay() {
+  if (replayTimer) {
+    clearInterval(replayTimer);
+    replayTimer = null;
+  }
+  document.getElementById("replay-autoplay").textContent = "▶ 自动播放";
+}
+
+function toggleAutoplay() {
+  if (replayTimer) {
+    stopAutoplay();
+    return;
+  }
+  if (replayIdx >= historyFrames.length - 1) replayIdx = -1;  // loop from start
+  document.getElementById("replay-autoplay").textContent = "⏸ 暂停";
+  replayTimer = setInterval(() => {
+    if (replayIdx >= historyFrames.length - 1) {
+      stopAutoplay();
+      return;
+    }
+    replayIdx++;
+    showReplayFrame();
+  }, 900);
+}
+
 function exitReplay() {
+  stopAutoplay();
   replayMode = false;
   replayBar.style.display = "none";
   if (state) renderBoard(state.board);
@@ -717,13 +730,17 @@ function exitReplay() {
 replayBtn.addEventListener("click", () => {
   if (replayMode) exitReplay(); else enterReplay();
 });
+document.getElementById("replay-autoplay").addEventListener("click", toggleAutoplay);
 document.getElementById("replay-prev").addEventListener("click", () => {
+  stopAutoplay();
   if (replayIdx > 0) { replayIdx--; showReplayFrame(); }
 });
 document.getElementById("replay-next").addEventListener("click", () => {
+  stopAutoplay();
   if (replayIdx < historyFrames.length - 1) { replayIdx++; showReplayFrame(); }
 });
 replaySlider.addEventListener("input", () => {
+  stopAutoplay();
   replayIdx = parseInt(replaySlider.value, 10);
   showReplayFrame();
 });

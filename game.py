@@ -199,6 +199,32 @@ def battle(attacker_type, defender_type):
     return "both_die", defender_type
 
 
+def _bound_hint(attacker_type, outcome):
+    """Deduction about an unseen defender after the attacker died — a bound
+    marker shown on that enemy piece instead of a false exact type.
+
+    Note: in this game a 地雷 destroys the attacker AND itself (both_die),
+    so mines can never produce defender_wins.
+
+    defender_wins — defender strictly outranks the attacker, guaranteed a
+    real combat piece (mines and bombs always end in mutual destruction):
+      - 工兵 → "非地雷" (it beat an engineer, so it's a combat piece)
+      - other X → ">X" (outranks X)
+    both_die — defender is dead too:
+      - 工兵 → "工兵或炸弹" (engineers defuse mines; only a bomb or a fellow
+        engineer can kill one)
+      - 炸弹 → None (a bomb dies to anything — no information gained)
+      - other X → "同级/雷/弹" (equal rank, a mine, or a bomb)
+    """
+    if outcome == "defender_wins":
+        return "非地雷" if attacker_type == "工兵" else f">{attacker_type}"
+    if attacker_type == "工兵":
+        return "工兵或炸弹"
+    if attacker_type == "炸弹":
+        return None
+    return "同级/雷/弹"
+
+
 # === Preset formations =================================================
 #
 # Coordinates below are in LOCAL space: row 0 = your back row (HQ row),
@@ -393,6 +419,34 @@ def _preset_abs_layout(owner, idx):
     return out
 
 
+def perturb_layout(owner, layout):
+    """Return a slightly randomized variant of a legal layout so repeated
+    games don't let the opponent memorize the AI's formation: a random
+    horizontal mirror (columns 0<->4, 1<->2 — HQ cells swap with each other,
+    so the flag stays legal) plus a few legality-checked pairwise swaps."""
+    layout = dict(layout)
+    mine_rows = MINE_ROWS[owner]
+    hq_cells = HQ_CELLS[owner]
+
+    if random.random() < 0.5:
+        layout = {(r, 4 - c): t for (r, c), t in layout.items()}
+
+    def ok_at(pos, t):
+        if t == "军旗":
+            return pos in hq_cells
+        if t == "地雷":
+            return pos[0] in mine_rows
+        return True
+
+    positions = list(layout.keys())
+    for _ in range(random.randint(2, 5)):
+        a, b = random.sample(positions, 2)
+        ta, tb = layout[a], layout[b]
+        if ta != tb and ok_at(a, tb) and ok_at(b, ta):
+            layout[a], layout[b] = tb, ta
+    return layout
+
+
 def setup_apply_preset(game, owner, idx):
     """Overwrite this side's setup with one of the built-in or custom formations."""
     if game.get("phase") != "setup":
@@ -566,7 +620,7 @@ def setup_start(game):
         return {"ok": False, "error": "player must place a 军旗 (flag)"}
 
     ai_preset = random.randrange(len(PRESET_FORMATIONS))
-    ai_layout = _preset_abs_layout("ai", ai_preset)
+    ai_layout = perturb_layout("ai", _preset_abs_layout("ai", ai_preset))
     game["setup"]["ai"] = {f"{r},{c}": t for (r, c), t in ai_layout.items()}
     game.setdefault("setup_preset", {"player": None, "ai": None})["ai"] = ai_preset
 
@@ -706,19 +760,31 @@ def execute_move(game, owner, from_pos, to_pos):
 
     event = {"actor": owner, "from": from_pos, "to": to_pos}
 
+    fkey = f"{from_pos[0]},{from_pos[1]}"
+    tkey = f"{to_pos[0]},{to_pos[1]}"
+
     if target and target["alive"]:
         outcome, _ = battle(piece["type"], target["type"])
-        tkey = f"{to_pos[0]},{to_pos[1]}"
 
-        # The defender's side always learns exactly what attacked it — the
-        # surviving attacker stays marked, so you stop feeding weaker pieces
-        # into a known-strong enemy.
-        game["revealed_to"][opponent][tkey] = piece["type"]
-        # The attacker only identifies the defender when it wins the square —
-        # a losing piece dies before confirming what it hit (this is what the
-        # log's 敌方未知 masking reflects).
+        # The defender's side always learns exactly what attacked it. If the
+        # attacker survives, the marker stays on the fight square (and follows
+        # the piece when it later moves); if the attacker died, the marker
+        # goes on its origin square as pure history — attaching it to the
+        # defender's square would let it transfer onto the defender when the
+        # defender moves away.
+        atk_key = tkey if outcome in ("attacker_wins", "flag_taken_player") else fkey
+        game["revealed_to"][opponent][atk_key] = piece["type"]
+        # The attacker identifies the defender exactly only when it wins the
+        # square; when its piece dies it still learns a bound/deduction —
+        # ">团长" = the defender outranks 团长, "非地雷" = an engineer only
+        # loses to real pieces, "同级/雷/弹" = mutual destruction means equal
+        # rank, a mine, or a bomb. None = a dead bomb taught us nothing.
         if outcome in ("attacker_wins", "flag_taken_player"):
             game["revealed_to"][owner][tkey] = target["type"]
+        else:
+            hint = _bound_hint(piece["type"], outcome)
+            if hint:
+                game["revealed_to"][owner][tkey] = hint
 
         event["combat"] = True
         event["attacker_type"] = piece["type"]
@@ -750,19 +816,13 @@ def execute_move(game, owner, from_pos, to_pos):
             _reveal_flag_on_commander_down(game, opponent, event)
     else:
         game["board"][to_pos] = piece
-        game["my_known"][owner][f"{to_pos[0]},{to_pos[1]}"] = piece["type"]
-
-    # A revealed piece stays revealed when it MOVES — the opponent watched it
-    # go. Reveal tracking follows the piece, not the square.
-    if game["board"].get(to_pos) is piece:
+        game["my_known"][owner][tkey] = piece["type"]
+        # A revealed piece stays revealed when it MOVES — the opponent watched
+        # it go. Clear stale memories at the destination first so a different
+        # piece's history can't mislabel the newcomer.
         opp_rev = game["revealed_to"][opponent]
-        own_rev = game["revealed_to"][owner]
-        fkey = f"{from_pos[0]},{from_pos[1]}"
-        tkey = f"{to_pos[0]},{to_pos[1]}"
-        # Stale memories at the destination describe whatever died/left there
-        # earlier — they must NOT mislabel this newly-arrived piece.
         opp_rev.pop(tkey, None)
-        own_rev.pop(tkey, None)
+        game["revealed_to"][owner].pop(tkey, None)
         if opp_rev.get(fkey):
             opp_rev[tkey] = opp_rev.pop(fkey)
 
@@ -827,6 +887,29 @@ def view_for_owner(game, owner):
     return view
 
 
+def full_board_view(game):
+    """God-view of the board: every piece shown with its real type and owner.
+    Used for replay frames — the point of a replay is to see what actually
+    happened, not what each side knew at the time."""
+    view = []
+    for r in range(ROWS):
+        row = []
+        for c in range(COLS):
+            t = TERRAIN[(r, c)]
+            cell = {
+                "type": t["kind"],
+                "camp": t["kind"] == "camp",
+                "hq": t["kind"] == "hq",
+                "rail": t["rail"],
+            }
+            piece = game["board"].get((r, c))
+            if piece:
+                cell["piece"] = {"type": piece["type"], "owner": piece["owner"]}
+            row.append(cell)
+        view.append(row)
+    return view
+
+
 def setup_board_view(game, owner):
     """Board preview during the setup phase: shows only the owner's own
     placed pieces (the opponent's pieces aren't placed onto the shared
@@ -882,7 +965,11 @@ HIDDEN INFO: enemy types are hidden until combat. When pieces collide, the DEFEN
 always learns the attacker's type — a surviving attacker stays marked even after it moves
 later — while the attacker identifies the defender only if it wins the square. Listed in
 enemy_pieces_revealed. Never feed a weaker piece into a revealed stronger enemy; check
-ranks before choosing an [attack] option.
+ranks before choosing an [attack] option. A revealed entry can also be a DEDUCTION shown
+when your attacking piece died: ">X" = the defender outranks your X (defender_wins means
+it is a real combat piece — mines and bombs always end in mutual destruction); "非地雷" =
+it beat your 工兵, so it is a combat piece; "同级/雷/弹" = mutual destruction with a
+non-engineer, so it was equal rank, a mine, or a bomb.
 
 FLAG INTELLIGENCE:
 - HQ deduction: the flag can never leave its HQ. If a piece moves onto one enemy HQ and the

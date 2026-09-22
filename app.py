@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -20,6 +21,7 @@ from game import (
     build_jev_questions,
     build_jev_state,
     execute_move,
+    full_board_view,
     in_bounds,
     movable_pieces,
     new_game,
@@ -106,6 +108,7 @@ def get_ctx():
             oldest = min(GAMES, key=lambda k: GAMES[k]["last_seen"])
             del GAMES[oldest]
         ctx = _new_ctx()
+        ctx["game_id"] = gid
         GAMES[gid] = ctx
     ctx["last_seen"] = time.time()
     return ctx
@@ -351,6 +354,54 @@ def _experience_fields():
     }
 
 
+# === Replay frames: god-view snapshots of the board after every move ======
+# Persisted per game_id so a replay survives a page refresh or even a
+# server restart.
+
+REPLAY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replays")
+
+OUTCOME_ZH = {
+    "attacker_wins": "攻方胜",
+    "defender_wins": "守方胜",
+    "both_die": "同归于尽",
+    "flag_taken_player": "玩家夺旗",
+    "flag_taken_ai": "AI夺旗",
+}
+
+
+def _replay_path(game_id):
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", game_id or "default")[:64]
+    return os.path.join(REPLAY_DIR, safe + ".json")
+
+
+def _frame_label(actor, event):
+    who = "玩家" if actor == "player" else "AI"
+    s = f"{who} ({event['from'][0]},{event['from'][1]})→({event['to'][0]},{event['to'][1]})"
+    if event.get("combat"):
+        s += f" 战斗:{OUTCOME_ZH.get(event.get('outcome'), event.get('outcome'))}"
+    if event.get("flag_deduced"):
+        s += " 排除大本营→定位军旗"
+    if event.get("flag_revealed"):
+        s += " 亮旗"
+    return s
+
+
+def append_replay_frame(ctx, label):
+    game = ctx["game"]
+    game.setdefault("replay", []).append({
+        "turn": game["turn"],
+        "label": label,
+        "board": full_board_view(game),
+    })
+    try:
+        os.makedirs(REPLAY_DIR, exist_ok=True)
+        with open(_replay_path(ctx["game_id"]), "w", encoding="utf-8") as f:
+            json.dump({"frames": game["replay"], "winner": game.get("winner")},
+                      f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
 @app.route("/api/move", methods=["POST"])
 def player_move():
     """Player move only — resolves combat locally and returns immediately.
@@ -375,6 +426,7 @@ def player_move():
         return jsonify(result), 400
 
     game["awaiting_ai"] = not game["winner"]
+    append_replay_frame(ctx, _frame_label("player", result["event"]))
     maybe_finalize_experience(ctx)
     return jsonify({
         "ok": True,
@@ -411,6 +463,7 @@ def ai_move():
                 "event": ai_result["event"],
                 "winner": game["winner"],
             }
+            append_replay_frame(ctx, _frame_label("ai", ai_result["event"]))
         else:
             response["ai_move_error"] = ai_result.get("error")
     else:
@@ -503,10 +556,33 @@ def setup_save_custom_endpoint():
 
 @app.route("/api/setup/start", methods=["POST"])
 def setup_start_endpoint():
-    result = setup_start(get_ctx()["game"])
+    ctx = get_ctx()
+    result = setup_start(ctx["game"])
     if not result.get("ok"):
         return jsonify(result), 400
+    # Frame 0 = the opening deployment (god view, all types visible).
+    ctx["game"]["replay"] = []
+    append_replay_frame(ctx, "开局")
     return jsonify(result)
+
+
+@app.route("/api/replay", methods=["GET"])
+def replay_endpoint():
+    """All replay frames for this game — full-visibility board snapshots so
+    the player can review what actually happened. Falls back to the on-disk
+    replay file if this game session was restarted."""
+    ctx = get_ctx()
+    frames = ctx["game"].get("replay")
+    if not frames:
+        path = _replay_path(ctx["game_id"])
+        if os.path.exists(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    frames = json.load(f).get("frames", [])
+                ctx["game"]["replay"] = frames
+            except (json.JSONDecodeError, OSError):
+                frames = []
+    return jsonify({"frames": frames or []})
 
 
 if __name__ == "__main__":
