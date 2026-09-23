@@ -88,9 +88,16 @@ async function loadFile(name, btn) {
   frames = data.frames || [];
   winner = data.winner;
   const meta = data.meta || {};
-  titleEl.innerHTML = meta.player_side
-    ? `<b>${meta.player_side}</b>(player/先手) vs <b>${meta.ai_side}</b>(ai) · ${frames.length} 帧`
-    : `${name} · ${frames.length} 帧`;
+  if (meta.player_side) {
+    titleEl.innerHTML =
+      `<b>${meta.player_side}</b>(先手) vs <b>${meta.ai_side}</b>(后手) · ${frames.length} 帧`;
+    document.getElementById("side-top").textContent = `AI 侧（上方）= ${meta.ai_side}`;
+    document.getElementById("side-bottom").textContent = `玩家侧（下方，先手）= ${meta.player_side}`;
+  } else {
+    titleEl.innerHTML = `${name} · ${frames.length} 帧`;
+    document.getElementById("side-top").textContent = "AI 侧（上方）";
+    document.getElementById("side-bottom").textContent = "玩家侧（下方，先手）";
+  }
   slider.max = Math.max(0, frames.length - 1);
   show(0);
 }

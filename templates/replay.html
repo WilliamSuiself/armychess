@@ -22,6 +22,12 @@
   .replay-main { flex: 1; }
   .replay-title { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
   .replay-title b { color: #f8fafc; }
+  .side-tag {
+    font-size: 12px; font-weight: 600; padding: 2px 10px; margin: 2px 0;
+    border-radius: 4px; display: inline-block;
+  }
+  .side-tag-top { color: #fca5a5; background: rgba(127,29,29,.4); }
+  .side-tag-bottom { color: #86efac; background: rgba(20,83,45,.4); }
 </style>
 </head>
 <body>
@@ -36,7 +42,9 @@
       <div class="replay-list" id="replay-list"><h3>对局记录</h3><div id="files"></div></div>
       <section class="board-section replay-main">
         <div class="replay-title" id="replay-title">← 选择一局开始回放</div>
+        <div class="side-tag side-tag-top" id="side-top">AI 侧</div>
         <div class="board" id="board"></div>
+        <div class="side-tag side-tag-bottom" id="side-bottom">玩家侧（先手）</div>
         <div class="replay-bar" id="replay-bar" style="display:flex">
           <button id="rp-autoplay" class="replay-btn">▶ 自动播放</button>
           <button id="rp-prev" class="replay-btn">◀ 上一步</button>
