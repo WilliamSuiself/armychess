@@ -894,10 +894,12 @@ def execute_move(game, owner, from_pos, to_pos):
                 del game["board"][to_pos]
             game["my_known"][owner][tkey] = None
         elif outcome == "flag_taken_player":
+            # Name is misleading — it means "a flag was taken"; the winner is
+            # whoever moved (the attacker), not hard-coded "player".
             game["board"][to_pos] = piece
             piece["has_moved"] = True
             game["my_known"][owner][tkey] = piece["type"]
-            game["winner"] = "player"
+            game["winner"] = owner
             game["phase"] = "ended"
         elif outcome == "flag_taken_ai":
             game["winner"] = "ai"

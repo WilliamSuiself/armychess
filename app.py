@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 from game import (
+    HQ_CELLS,
     IMMOVABLE,
     RANK,
     ROWS,
@@ -164,34 +165,119 @@ def enumerate_ai_moves(game):
     return moves
 
 
-def prune_moves(game, moves, max_options=MAX_MOVE_OPTIONS):
-    """Cut down a large legal-move list to a shortlist Jev can score quickly,
-    keeping every capture and one representative move per other piece."""
+def _predict_score(att_type, known_label):
+    """Rough value of attacking a defender labelled `known_label`
+    (exact type, deduction marker, or None = unknown)."""
+    if not known_label:
+        return 1.5                              # face-down defender — a probe
+    if known_label in RANK or known_label in IMMOVABLE or known_label == "炸弹":
+        out = battle(att_type, known_label)[0]
+        return {"attacker_wins": 3.0, "flag_taken_player": 4.0,
+                "both_die": 2.0, "defender_wins": 0.0}.get(out, 0.0)
+    if isinstance(known_label, str):
+        if known_label == "地雷":
+            return 3.0 if att_type == "工兵" else 0.0
+        if known_label == "军旗":
+            return 4.0
+        if known_label == "非地雷":
+            return 1.6                          # combat piece, unknown rank
+        if known_label.startswith(">"):
+            base = known_label[1:].split("或")[0]
+            vr = RANK.get(base, 0)
+            if "或雷" in known_label and att_type == "工兵":
+                return 2.0                      # might be a mine we can defuse
+            return 2.5 if RANK.get(att_type, 0) > vr else 0.3
+        if known_label in ("同级或炸弹", "工兵或炸弹"):
+            return 1.0
+    return 1.5
+
+
+def _na_score(game, move, owner, opponent):
+    """Heuristic for a non-attack move: forward progress toward the enemy
+    flag, camp shelter for revealed pieces, plan continuity, then jitter."""
+    fp, tp = move
+    piece = game["board"][fp]
+    s = 0.0
+    fwd = (tp[0] - fp[0]) if owner == "ai" else (fp[0] - tp[0])
+    s += fwd                                    # toward the enemy flag row
+    if TERRAIN[tp]["kind"] == "camp":
+        # revealed pieces gain more from camp shelter than hidden ones
+        s += 0.8 if game["revealed_to"][opponent].get(f"{fp[0]},{fp[1]}") else 0.3
+    log = game["log"]
+    if len(log) >= 2 and log[-1]["actor"] == opponent:
+        prev = log[-2]                          # our previous move
+        if tuple(prev.get("from", ())) == fp or tuple(prev.get("to", ())) == fp:
+            s += 0.7                            # keep pushing the same plan
+    s += random.random() * 0.3                  # tie-breaker jitter
+    return s
+
+
+def prune_moves(game, moves, max_options=MAX_MOVE_OPTIONS, owner="ai"):
+    """Cut a large legal-move list to a shortlist the model can score.
+
+    Priority tiers (per user spec): capture/defend the flag first, then
+    attacks ordered by predicted value, then directional non-attacks —
+    one representative per piece, ranked by a small heuristic."""
     if len(moves) <= max_options:
         return moves
 
-    attacks = [m for m in moves if game_at(game, m[1]) and game_at(game, m[1])["alive"]]
-    non_attacks = [m for m in moves if m not in attacks]
+    opponent = "player" if owner == "ai" else "ai"
+    known = game["revealed_to"][owner]
 
-    if len(attacks) >= max_options:
-        random.shuffle(attacks)
-        return attacks[:max_options]
+    # Squares where the enemy flag is known/deduced to sit, plus both enemy
+    # HQ squares — stepping onto an unknown HQ is a flag-capture attempt.
+    flag_sq = {tuple(int(x) for x in k.split(","))
+               for k, v in known.items() if v == "军旗"} | set(HQ_CELLS[opponent])
 
-    remaining = max_options - len(attacks)
-    by_piece = {}
-    for m in non_attacks:
-        by_piece.setdefault(m[0], []).append(m)
-    reps = [random.choice(lst) for lst in by_piece.values()]
-    random.shuffle(reps)
+    # Enemy pieces that can take our flag next turn — capturing them is the
+    # highest-priority defensive move in the shortlist.
+    my_flag = next((p for p, pc in game["board"].items()
+                    if pc["owner"] == owner and pc["type"] == "军旗"
+                    and pc["alive"]), None)
+    threats = set()
+    if my_flag is not None:
+        for ep, pc in game["board"].items():
+            if (pc["owner"] == opponent and pc["alive"]
+                    and my_flag in possible_moves(game, opponent, ep)):
+                threats.add(ep)
 
-    chosen = reps[:remaining]
-    pruned = attacks + chosen
-    if len(pruned) < max_options:
-        leftover = [m for m in non_attacks if m not in chosen]
-        random.shuffle(leftover)
-        pruned += leftover[: max_options - len(pruned)]
-    random.shuffle(pruned)
-    return pruned
+    flag_cap, defense, attacks, others = [], [], [], []
+    for m in moves:
+        fp, tp = m
+        tgt = game_at(game, tp)
+        if tp in flag_sq or (tgt and tgt["type"] == "军旗"):
+            flag_cap.append(m)
+        elif tp in threats:
+            defense.append((_predict_score(game["board"][fp]["type"],
+                                           known.get(f"{tp[0]},{tp[1]}")), m))
+        elif tgt and tgt["owner"] == opponent:
+            attacks.append((_predict_score(game["board"][fp]["type"],
+                                           known.get(f"{tp[0]},{tp[1]}")), m))
+        else:
+            others.append(m)
+
+    defense.sort(key=lambda x: -x[0])
+    attacks.sort(key=lambda x: -x[0])
+    keep = flag_cap + [m for _, m in defense] + [m for _, m in attacks]
+    keep = keep[:max_options]
+
+    if len(keep) < max_options:
+        by_piece = {}
+        for m in others:
+            by_piece.setdefault(m[0], []).append(m)
+        reps = []
+        for fp, lst in by_piece.items():
+            lst.sort(key=lambda m: -_na_score(game, m, owner, opponent))
+            reps.append(lst[0])
+        reps.sort(key=lambda m: -_na_score(game, m, owner, opponent))
+        keep += reps[:max_options - len(keep)]
+        if len(keep) < max_options:
+            rest = sorted((m for m in others if m not in keep),
+                          key=lambda m: -_na_score(game, m, owner, opponent))
+            keep += rest[:max_options - len(keep)]
+
+    random.shuffle(keep)
+    return keep
 
 
 def build_move_choice_criteria(game, moves, owner="ai"):

@@ -62,7 +62,7 @@ def decide(game, side, client, backend):
     moves = all_moves(game, side)
     if not moves:
         return None, None, {"error": "no-legal-moves"}
-    moves = prune_moves(game, moves)
+    moves = prune_moves(game, moves, owner=side)
 
     state = G.build_jev_state(game, side)
     questions = G.build_jev_questions()
