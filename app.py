@@ -73,7 +73,12 @@ GAME_TTL = 12 * 3600  # evict games untouched for 12h
 # Global across all games — that's the whole point of the experience layer.
 WEIGHTS = experience.load()
 
-# Jev client (lazy init so app still starts without key)
+# Decision backend: AI_BACKEND=laya uses the local open-source Laya model
+# (drop-in replacement for Jev — same state+questions -> typed answers
+# contract, no API key, no per-move network call). Default is Jev.
+AI_BACKEND = os.environ.get("AI_BACKEND", "jev").lower()
+
+# Jev/Laya client (lazy init so app still starts without key/model)
 _JEV = None
 
 
@@ -81,9 +86,13 @@ def get_jev():
     global _JEV
     if _JEV is None:
         try:
-            _JEV = JevClient()
-        except ValueError as e:
-            print(f"[warn] Jev client disabled: {e}", file=sys.stderr)
+            if AI_BACKEND == "laya":
+                from laya_client import LayaClient
+                _JEV = LayaClient()
+            else:
+                _JEV = JevClient()
+        except Exception as e:
+            print(f"[warn] decision backend disabled: {e}", file=sys.stderr)
             _JEV = False  # sentinel
     return _JEV or None
 
@@ -619,5 +628,5 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print(f"Army Chess demo running on http://127.0.0.1:{port}")
     print(f"  base URL: {os.environ.get('KNOX_BASE_URL', 'https://api.knox.chat/v1')}")
-    print(f"  Jev enabled: {get_jev() is not None}")
+    print(f"  decision backend: {AI_BACKEND} (enabled: {get_jev() is not None})")
     app.run(host="127.0.0.1", port=port, debug=False)
