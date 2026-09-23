@@ -12,8 +12,14 @@ const GAME_ID = (() => {
   return id;
 })();
 
+// Which decision model plays the AI side — picked from the header dropdown,
+// persisted per tab so refresh keeps the choice. Sent as a header on every
+// request so the server can bind the backend to this game.
+const AI_BACKEND = sessionStorage.getItem("armyChessBackend") || "jev";
+
 function apiFetch(url, opts = {}) {
-  opts.headers = Object.assign({ "X-Game-Id": GAME_ID }, opts.headers || {});
+  opts.headers = Object.assign(
+    { "X-Game-Id": GAME_ID, "X-AI-Backend": AI_BACKEND }, opts.headers || {});
   return fetch(url, opts);
 }
 
@@ -798,5 +804,16 @@ function escapeHtml(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
+
+// AI backend picker — persists per tab; takes effect on the next request
+// (the header rides along on every apiFetch, so switching mid-game swaps
+// the brain at the next AI turn).
+const backendSel = document.getElementById("ai-backend");
+backendSel.value = AI_BACKEND;
+backendSel.addEventListener("change", () => {
+  sessionStorage.setItem("armyChessBackend", backendSel.value);
+  // apiFetch closes over the const AI_BACKEND — reload to swap cleanly.
+  location.reload();
+});
 
 refresh();

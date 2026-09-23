@@ -37,7 +37,10 @@ class LayaClient:
                 pass
 
     def system_one(self, state, questions, max_retries=4):
+        import sys, time as _t
+        _t0 = _t.time()
         resp = self.agent.predict(state, questions)
+        print(f"[laya] predict took {_t.time()-_t0:.2f}s", file=sys.stderr)
         return {
             "model": self.model_name,
             "answers": resp.get("answers", {}),

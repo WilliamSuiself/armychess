@@ -5,6 +5,7 @@ import os
 import random
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -74,28 +75,41 @@ GAME_TTL = 12 * 3600  # evict games untouched for 12h
 # Global across all games — that's the whole point of the experience layer.
 WEIGHTS = experience.load()
 
-# Decision backend: AI_BACKEND=laya uses the local open-source Laya model
-# (drop-in replacement for Jev — same state+questions -> typed answers
-# contract, no API key, no per-move network call). Default is Jev.
+# Decision backends: "jev" (cloud API) or "laya" (local open-source model —
+# same state+questions -> typed answers contract, no API key, no per-move
+# network call). Each game picks its own via the X-AI-Backend header or the
+# setup payload; AI_BACKEND env sets the default.
 AI_BACKEND = os.environ.get("AI_BACKEND", "jev").lower()
 
-# Jev/Laya client (lazy init so app still starts without key/model)
-_JEV = None
+# Lazily-initialised clients keyed by backend name; False = failed init.
+# The lock also guards against concurrent first-use: importing transformers
+# mid-import in a second thread raises spurious "cannot import name" errors.
+_CLIENTS = {}
+_CLIENT_LOCK = threading.Lock()
+
+
+def get_client(backend=None):
+    backend = (backend or AI_BACKEND).lower()
+    if backend not in ("jev", "laya"):
+        backend = "jev"
+    with _CLIENT_LOCK:
+        c = _CLIENTS.get(backend)
+        if c is None:
+            try:
+                if backend == "laya":
+                    from laya_client import LayaClient
+                    c = LayaClient()
+                else:
+                    c = JevClient()
+            except Exception as e:
+                print(f"[warn] {backend} backend disabled: {e}", file=sys.stderr)
+                c = False  # sentinel
+            _CLIENTS[backend] = c
+        return c or None
 
 
 def get_jev():
-    global _JEV
-    if _JEV is None:
-        try:
-            if AI_BACKEND == "laya":
-                from laya_client import LayaClient
-                _JEV = LayaClient()
-            else:
-                _JEV = JevClient()
-        except Exception as e:
-            print(f"[warn] decision backend disabled: {e}", file=sys.stderr)
-            _JEV = False  # sentinel
-    return _JEV or None
+    return get_client()
 
 
 def _new_ctx():
@@ -104,6 +118,7 @@ def _new_ctx():
         "exp_buffer": experience.new_buffer(),
         "exp_finalized": False,
         "last_seen": time.time(),
+        "backend": AI_BACKEND,
     }
 
 
@@ -122,13 +137,18 @@ def get_ctx():
         ctx = _new_ctx()
         ctx["game_id"] = gid
         GAMES[gid] = ctx
+    be = request.headers.get("X-AI-Backend")
+    if be:
+        ctx["backend"] = be
     ctx["last_seen"] = time.time()
     return ctx
 
 
 def reset_ctx(ctx):
+    backend = ctx.get("backend")          # keep the chosen AI across resets
     fresh = _new_ctx()
     ctx.update(fresh)
+    ctx["backend"] = backend or AI_BACKEND
 
 
 def current_phase(game):
@@ -350,9 +370,9 @@ def jev_choose_ai_move(ctx):
         return {"error": "no-legal-moves"}
     moves = prune_moves(game, moves)
 
-    client = get_jev()
+    client = get_client(ctx.get("backend"))
     if client is None:
-        return {"error": "jev-disabled", "moves": moves}
+        return {"error": "backend-disabled", "moves": moves}
 
     phase = current_phase(game)
     state = build_jev_state(game, "ai")
@@ -425,11 +445,13 @@ def index():
 
 @app.route("/api/state", methods=["GET"])
 def get_state():
-    game = get_ctx()["game"]
+    ctx = get_ctx()
+    game = ctx["game"]
     board = setup_board_view(game, "player") if game.get("phase") == "setup" \
         else view_for_owner(game, "player")
     state = {
         "phase": game.get("phase"),
+        "backend": ctx.get("backend", AI_BACKEND),
         "board": board,
         "turn": game["turn"],
         "winner": game["winner"],
@@ -730,6 +752,14 @@ def setup_save_custom_endpoint():
 @app.route("/api/setup/start", methods=["POST"])
 def setup_start_endpoint():
     ctx = get_ctx()
+    data = request.get_json(force=True) or {}
+    if data.get("backend"):
+        ctx["backend"] = data["backend"]
+    # Warm the local model in the background while the player is still
+    # setting up / making their first move — Laya's first call compiles
+    # kernels and would otherwise stall the first AI turn.
+    if ctx.get("backend") == "laya":
+        threading.Thread(target=get_client, args=("laya",), daemon=True).start()
     result = setup_start(ctx["game"])
     if not result.get("ok"):
         return jsonify(result), 400
