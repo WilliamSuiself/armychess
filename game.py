@@ -41,6 +41,7 @@ Combat:
 import json
 import os
 import random
+from collections import Counter
 from copy import deepcopy
 
 
@@ -1089,6 +1090,13 @@ recent_events = the last few half-moves from YOUR perspective — use them to ke
 coherent plan (follow up on a probe, keep pressing a weakened lane, stop wandering
 the same piece back and forth). Enemy pieces there appear as your intel markers.
 
+enemy_inventory = the enemy casualty ledger: confirmed_dead (types you verified),
+uncertain_dead ("X或炸弹" — mutual destruction where you can't tell which), and
+remaining_by_type with ranges like "0~2存活". strongest_confirmed_alive is the
+highest rank definitely still on the board — if 司令 is gone, 军长 rules. If
+bombs_remaining is "0~0" or P_all_bombs_gone is high, your big pieces can attack
+unknowns far more safely.
+
 FLAG INTELLIGENCE:
 - HQ deduction: the flag can never leave its HQ. If a piece moves onto one enemy HQ and the
   game does NOT end, that square was not the flag — the OTHER enemy HQ is then automatically
@@ -1146,6 +1154,66 @@ def build_jev_state(game, owner):
     own_flag_exposed = bool(
         own_flag_pos and game["revealed_to"][opponent].get(own_flag_pos) == "军旗")
 
+    # --- Enemy casualty ledger -----------------------------------------
+    # Derived from the combat log — always from THIS side's knowledge:
+    #   we won attacking      -> defender type was revealed: exact death
+    #   enemy attacked & died -> dead attacker flips face-up: exact death
+    #   we attacked, both die -> defender was "同级或炸弹": fuzzy death
+    pool = Counter(SETUP_POOL[opponent])
+    dead_exact = Counter()
+    dead_fuzzy = []          # e.g. "旅长或炸弹"
+    for ev in game["log"]:
+        if not ev.get("combat"):
+            continue
+        oc = ev["outcome"]
+        if ev["actor"] == owner:
+            if oc in ("attacker_wins", "flag_taken_player"):
+                dead_exact[ev["defender_type"]] += 1
+            elif oc == "both_die":
+                dead_fuzzy.append(f"{ev['attacker_type']}或炸弹")
+        else:
+            if oc in ("defender_wins", "both_die"):
+                dead_exact[ev["attacker_type"]] += 1
+
+    remaining = {}
+    for t, n in pool.items():
+        exact = dead_exact.get(t, 0)
+        fuzzy = sum(1 for lbl in dead_fuzzy if t in lbl.split("或"))
+        lo, hi = max(0, n - exact - fuzzy), n - exact
+        if hi == 0:
+            remaining[t] = "全灭(已确认)"
+        elif lo == hi:
+            remaining[t] = f"{hi}存活"
+        else:
+            # rough P(each fuzzy death was this type) ≈ 0.5 — honest range
+            remaining[t] = f"{lo}~{hi}存活(含{fuzzy}例疑似)"
+    strongest_confirmed = next(
+        (t for t in sorted(RANK, key=RANK.get, reverse=True)
+         if dead_exact.get(t, 0) < pool[t]
+         and not any(t in l.split("或") for l in dead_fuzzy)), None)
+    strongest_possible = next(
+        (t for t in sorted(RANK, key=RANK.get, reverse=True)
+         if pool[t] > dead_exact.get(t, 0)), None)
+
+    # Per-side fuzzy deaths can also settle the "did a bomb die" question:
+    # P(all bombs gone) ≈ 0.5^(fuzzy labels that could be bombs) when the
+    # remaining slots only come from fuzzy deaths.
+    bomb_fuzzy = sum(1 for l in dead_fuzzy if "炸弹" in l)
+    bomb_hi = pool["炸弹"] - dead_exact.get("炸弹", 0)
+    bomb_lo = max(0, bomb_hi - bomb_fuzzy)
+    p_all_bombs_gone = round(0.5 ** bomb_fuzzy, 2) if bomb_lo == 0 and bomb_fuzzy else (
+        1.0 if bomb_hi == 0 else 0.0)
+
+    enemy_inventory = {
+        "confirmed_dead": dict(dead_exact),
+        "uncertain_dead": dead_fuzzy,
+        "remaining_by_type": remaining,
+        "strongest_confirmed_alive": strongest_confirmed,
+        "strongest_possibly_alive": strongest_possible,
+        "bombs_remaining": f"{bomb_lo}~{bomb_hi}",
+        "P_all_bombs_gone": p_all_bombs_gone,
+    }
+
     # Continuous memory: the last few half-moves, rendered from THIS side's
     # perspective — own pieces show real types, enemies show only what this
     # side legitimately learned (">X" bounds, dead pieces face-up, or "?").
@@ -1182,6 +1250,7 @@ def build_jev_state(game, owner):
         "your_flag_pos": own_flag_pos,
         "your_flag_location_exposed_to_enemy": own_flag_exposed,
         "recent_events": recent,
+        "enemy_inventory": enemy_inventory,
         "turn": game["turn"],
         "board_size": f"{ROWS}x{COLS}",
         "your_goal": "Capture the opponent's 军旗 (flag), or leave them with no legal move.",
