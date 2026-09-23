@@ -838,7 +838,8 @@ def execute_move(game, owner, from_pos, to_pos):
     del game["board"][from_pos]
     game["my_known"][owner][f"{from_pos[0]},{from_pos[1]}"] = None
 
-    event = {"actor": owner, "from": from_pos, "to": to_pos}
+    event = {"actor": owner, "from": from_pos, "to": to_pos,
+             "mover_type": piece["type"]}
 
     fkey = f"{from_pos[0]},{from_pos[1]}"
     tkey = f"{to_pos[0]},{to_pos[1]}"
@@ -862,20 +863,20 @@ def execute_move(game, owner, from_pos, to_pos):
             game["revealed_to"][opponent][tkey] = marker
         else:
             game["revealed_to"][opponent][fkey] = piece["type"]
-        # The attacker identifies the defender exactly only when it wins the
-        # square; when its piece dies it still learns a bound/deduction —
-        # ">团长或雷" = defender outranks 团长 or is a mine (only while the
-        # piece could physically be a mine: back two rows + never moved),
-        # "地雷" = it stopped a 司令, "非地雷" = it beat an 工兵, "同级或炸弹"
-        # = mutual destruction means equal rank or a bomb.
+            marker = piece["type"]
+        # What each side sees the combatants as — stored on the event so the
+        # recent-events feed can replay history without leaking real types.
+        event["seen_attacker"] = marker
         if outcome in ("attacker_wins", "flag_taken_player"):
             game["revealed_to"][owner][tkey] = target["type"]
+            event["seen_defender"] = target["type"]
         else:
             hint = _bound_hint(piece["type"], outcome,
                                defender_pos=to_pos, defender_side=opponent,
                                defender_moved=bool(target.get("has_moved")))
             if hint:
                 game["revealed_to"][owner][tkey] = hint
+            event["seen_defender"] = hint or "?"
 
         event["combat"] = True
         event["attacker_type"] = piece["type"]
@@ -923,6 +924,9 @@ def execute_move(game, owner, from_pos, to_pos):
             if isinstance(mark, str) and mark.endswith("或雷"):
                 mark = mark[:-2]
             opp_rev[tkey] = mark
+        # What the opponent sees the mover as right now — for the recent
+        # events feed (a revealed piece shows its bound marker, not its name).
+        event["seen_mover"] = game["revealed_to"][opponent].get(tkey) or "?"
 
     # HQ deduction: stepping onto one enemy HQ without winning means the flag
     # was not there — and since the flag never leaves its HQ, it must be in
@@ -1079,6 +1083,10 @@ mutual-destruction defender). A plain ">X" marker (no 或雷) on a live enemy me
 killed your X and survived — strictly stronger than X, and provably a mobile combat
 piece, never a mine.
 
+recent_events = the last few half-moves from YOUR perspective — use them to keep a
+coherent plan (follow up on a probe, keep pressing a weakened lane, stop wandering
+the same piece back and forth). Enemy pieces there appear as your intel markers.
+
 FLAG INTELLIGENCE:
 - HQ deduction: the flag can never leave its HQ. If a piece moves onto one enemy HQ and the
   game does NOT end, that square was not the flag — the OTHER enemy HQ is then automatically
@@ -1136,6 +1144,31 @@ def build_jev_state(game, owner):
     own_flag_exposed = bool(
         own_flag_pos and game["revealed_to"][opponent].get(own_flag_pos) == "军旗")
 
+    # Continuous memory: the last few half-moves, rendered from THIS side's
+    # perspective — own pieces show real types, enemies show only what this
+    # side legitimately learned (">X" bounds, dead pieces face-up, or "?").
+    # Without it the model has zero memory and replans from scratch every turn.
+    outcome_cn = {"attacker_wins": "攻胜", "defender_wins": "守胜",
+                  "both_die": "同毁", "flag_taken_player": "夺旗",
+                  "flag_taken_ai": "夺旗"}
+    recent = []
+    for ev in game["log"][-6:]:
+        mine_move = ev["actor"] == owner
+        tag = "你" if mine_move else "敌"
+        fr, to = tuple(ev["from"]), tuple(ev["to"])
+        if ev.get("combat"):
+            atk = ev["attacker_type"] if mine_move else ev.get("seen_attacker", "?")
+            dfd = ev.get("seen_defender", "?") if mine_move else ev["defender_type"]
+            s = f"{tag}:{atk}{fr}→{dfd}{to} {outcome_cn.get(ev['outcome'], ev['outcome'])}"
+        else:
+            lbl = ev["mover_type"] if mine_move else ev.get("seen_mover", "?")
+            s = f"{tag}:{lbl}{fr}→{to}"
+        if ev.get("flags_revealed"):
+            s += " ⚑亮旗"
+        if ev.get("flag_deduced"):
+            s += " ⚑推断出旗"
+        recent.append(s)
+
     return {
         "rules": RULES_DESCRIPTION,
         "you_are": owner,
@@ -1146,6 +1179,7 @@ def build_jev_state(game, owner):
         "enemy_flag_known_at": enemy_flag_known,
         "your_flag_pos": own_flag_pos,
         "your_flag_location_exposed_to_enemy": own_flag_exposed,
+        "recent_events": recent,
         "turn": game["turn"],
         "board_size": f"{ROWS}x{COLS}",
         "your_goal": "Capture the opponent's 军旗 (flag), or leave them with no legal move.",
