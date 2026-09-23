@@ -404,6 +404,51 @@ def _replay_path(game_id):
     return os.path.join(REPLAY_DIR, safe + ".json")
 
 
+@app.route("/replay")
+def replay_page():
+    return render_template("replay.html")
+
+
+@app.route("/api/replays", methods=["GET"])
+def list_replays():
+    """List saved replay files (live games and head-to-head matches)."""
+    files = []
+    try:
+        for name in os.listdir(REPLAY_DIR):
+            if not name.endswith(".json"):
+                continue
+            path = os.path.join(REPLAY_DIR, name)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                files.append({
+                    "name": name,
+                    "frames": len(data.get("frames", [])),
+                    "winner": data.get("winner"),
+                    "meta": data.get("meta"),
+                    "mtime": os.path.getmtime(path),
+                })
+            except (OSError, json.JSONDecodeError):
+                continue
+    except OSError:
+        pass
+    files.sort(key=lambda x: -x["mtime"])
+    return jsonify({"files": files})
+
+
+@app.route("/api/replay_file", methods=["GET"])
+def replay_file():
+    """Return one saved replay file by basename."""
+    name = os.path.basename(request.args.get("name", ""))
+    if not name.endswith(".json"):
+        return jsonify({"error": "not found"}), 404
+    path = os.path.join(REPLAY_DIR, name)
+    if not os.path.isfile(path):
+        return jsonify({"error": "not found"}), 404
+    with open(path, encoding="utf-8") as f:
+        return jsonify(json.load(f))
+
+
 def _frame_label(actor, event):
     who = "玩家" if actor == "player" else "AI"
     s = f"{who} ({event['from'][0]},{event['from'][1]})→({event['to'][0]},{event['to'][1]})"

@@ -6,3 +6,4 @@ __pycache__/
 weights.json
 custom_formations.json
 replays/
+match_results.json

@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import os
 import random
 import sys
 import time
@@ -24,6 +25,26 @@ from laya_client import LayaClient
 load_dotenv()
 
 MAX_TURNS = 400  # total half-moves before calling it a draw
+REPLAY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replays")
+
+
+def frame_label(backend, side, event):
+    s = f"{backend}({side}) {tuple(event['from'])}→{tuple(event['to'])}"
+    if event.get("combat"):
+        s += f" ⚔{event['outcome']}"
+    if event.get("flag_deduced"):
+        s += " ⚑明旗"
+    return s
+
+
+def save_replay(path, meta, frames, winner):
+    try:
+        os.makedirs(REPLAY_DIR, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"meta": meta, "frames": frames, "winner": winner},
+                      f, ensure_ascii=False)
+    except OSError:
+        pass
 
 
 def all_moves(game, side):
@@ -78,6 +99,15 @@ def play_game(first_backend, clients, rng):
     game["setup"]["player"] = {f"{r},{c}": t for (r, c), t in pl.items()}
     G.setup_start(game)
 
+    # Replay frames — god-view board per move, saved to replays/ so the
+    # match can be watched back in the browser.
+    frames = [{"turn": 0, "label": "开局", "board": G.full_board_view(game)}]
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    replay_path = os.path.join(
+        REPLAY_DIR, f"match_{ts}_{first_backend}-first.json")
+    meta = {"player_side": first_backend,
+            "ai_side": side_map["ai"], "started": ts}
+
     side = "player"
     while not game["winner"] and game["turn"] < MAX_TURNS:
         backend = side_map[side]
@@ -104,7 +134,15 @@ def play_game(first_backend, clients, rng):
         print(f"  t{game['turn']:>3} {backend:>4}({side}): "
               f"{tuple(fp)}→{tuple(tp)}{tag} ({time.time()-t0:.1f}s)",
               flush=True)
+        frames.append({"turn": game["turn"],
+                       "label": frame_label(backend, side, ev),
+                       "board": G.full_board_view(game)})
+        save_replay(replay_path, meta, frames, game.get("winner"))
         side = "ai" if side == "player" else "player"
+
+    meta["ended"] = time.strftime("%Y%m%d-%H%M%S")
+    save_replay(replay_path, meta, frames, game.get("winner"))
+    print(f"  replay saved: {os.path.basename(replay_path)}", flush=True)
 
     if game["winner"]:
         return {"winner": side_map[game["winner"]], "reason": "win",

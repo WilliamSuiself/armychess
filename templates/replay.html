@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>复盘 · 军棋</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .replay-layout { display: flex; gap: 14px; align-items: flex-start; }
+  .replay-list {
+    width: 230px; max-height: 640px; overflow-y: auto;
+    background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+    padding: 8px; font-size: 12px;
+  }
+  .replay-list h3 { margin: 4px 6px 8px; font-size: 13px; color: #94a3b8; }
+  .replay-item {
+    padding: 7px 8px; margin-bottom: 6px; border-radius: 6px; cursor: pointer;
+    background: #1e293b; border: 1px solid #334155; line-height: 1.5;
+  }
+  .replay-item:hover { border-color: #64748b; }
+  .replay-item.active { border-color: #f59e0b; background: #292018; }
+  .replay-item .sub { color: #64748b; font-size: 11px; }
+  .replay-main { flex: 1; }
+  .replay-title { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  .replay-title b { color: #f8fafc; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🎬 复盘回放</h1>
+    <div class="subtitle">选择左侧对局 · 全知视角（所有棋子明牌）· <a href="/" style="color:#7dd3fc">← 返回对局</a></div>
+  </header>
+
+  <main>
+    <div class="replay-layout">
+      <div class="replay-list" id="replay-list"><h3>对局记录</h3><div id="files"></div></div>
+      <section class="board-section replay-main">
+        <div class="replay-title" id="replay-title">← 选择一局开始回放</div>
+        <div class="board" id="board"></div>
+        <div class="replay-bar" id="replay-bar" style="display:flex">
+          <button id="rp-autoplay" class="replay-btn">▶ 自动播放</button>
+          <button id="rp-prev" class="replay-btn">◀ 上一步</button>
+          <input id="rp-slider" type="range" min="0" max="0" value="0">
+          <button id="rp-next" class="replay-btn">下一步 ▶</button>
+          <div id="rp-label" class="replay-label"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="/static/replay.js"></script>
+</body>
+</html>
