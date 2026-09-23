@@ -194,25 +194,28 @@ def prune_moves(game, moves, max_options=MAX_MOVE_OPTIONS):
     return pruned
 
 
-def build_move_choice_criteria(game, moves):
+def build_move_choice_criteria(game, moves, owner="ai"):
     """Build a Choice criteria dict from a list of legal moves.
 
     Each label is annotated with what the move actually *does* terrain-wise
     (enters/leaves a camp, is a diagonal camp-hub hop, rail-slides, or gets
     stuck in HQ) so Jev doesn't have to re-derive that from raw coordinates —
     this is what lets it actually weigh camp protection/support moves.
+    `owner` = the side choosing, so attack annotations read that side's
+    reveal intel (used by the head-to-head match runner for both backends).
     """
+    enemy = "player" if owner == "ai" else "ai"
     criteria = {}
     for fp, tp in moves:
         piece = game_at(game=game, pos=fp)
         target_piece = game_at(game=game, pos=tp)
         label = f"{piece['type']}({fp[0]},{fp[1]}) → ({tp[0]},{tp[1]})"
 
-        if target_piece and target_piece["owner"] == "player":
+        if target_piece and target_piece["owner"] == enemy:
             # Annotate what is KNOWN or DEDUCED about the defender so Jev can
             # avoid suicidal attacks — without this the options all look the
             # same and it will happily feed a 排长 into a revealed 司令.
-            known = game["revealed_to"]["ai"].get(f"{tp[0]},{tp[1]}")
+            known = game["revealed_to"][owner].get(f"{tp[0]},{tp[1]}")
             if known and (known in RANK or known in IMMOVABLE or known == "炸弹"):
                 predicted = battle(piece["type"], known)[0]
                 tag = {
