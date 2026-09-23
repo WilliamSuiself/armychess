@@ -12,15 +12,32 @@ const GAME_ID = (() => {
   return id;
 })();
 
-// Which decision model plays the AI side — picked from the header dropdown,
-// persisted per tab so refresh keeps the choice. Sent as a header on every
-// request so the server can bind the backend to this game.
-const AI_BACKEND = sessionStorage.getItem("armyChessBackend") || "jev";
+// Who controls each side: "human" | "jev" | "laya". Persisted per tab so a
+// refresh keeps the matchup; sent as headers on every request so the server
+// binds controllers to this game.
+const CTL = {
+  player: sessionStorage.getItem("armyChessCtlPlayer") || "human",
+  ai: sessionStorage.getItem("armyChessCtlAi") || "jev",
+};
 
 function apiFetch(url, opts = {}) {
   opts.headers = Object.assign(
-    { "X-Game-Id": GAME_ID, "X-AI-Backend": AI_BACKEND }, opts.headers || {});
+    { "X-Game-Id": GAME_ID, "X-Ctl-Player": CTL.player, "X-Ctl-Ai": CTL.ai },
+    opts.headers || {});
   return fetch(url, opts);
+}
+
+// The side a human controls and is to move right now — null when spectating
+// an AI-vs-AI game or during an AI turn.
+function humanSide() {
+  if (!state || state.winner || state.phase !== "playing") return null;
+  const s = state.side_to_move;
+  return state.controllers?.[s] === "human" ? s : null;
+}
+
+function ctlName(side) {
+  const v = (state?.controllers || CTL)[side];
+  return { human: "玩家", jev: "Jev", laya: "Laya" }[v] || v;
 }
 
 const ICONS = {
@@ -153,18 +170,37 @@ async function refresh() {
     renderAIDecision(r.ai_probs);
     if (r.ai_probs.jev_io) renderJevIO(r.ai_probs.jev_io);
   }
-  // Page was (re)loaded while an AI move was still pending — resume it so the
-  // game doesn't get stuck waiting for a move that was never requested.
-  if (r.awaiting_ai && !busy) {
+
+  // 红方 is AI-controlled and the game is still in setup — auto-fill a
+  // preset formation server-side and start immediately.
+  if (r.phase === "setup" && r.controllers?.player !== "human" && !busy) {
+    busy = true;
+    setStatus("AI 布阵中...");
+    await apiFetch("/api/setup/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        player_controller: CTL.player, ai_controller: CTL.ai }),
+    }).then(r => r.json());
+    busy = false;
+    await refresh();
+    return;
+  }
+
+  // Drive AI turns until a human is to move or the game ends. This also
+  // resumes a pending AI turn after a page reload.
+  if (!busy && r.phase === "playing" && !r.winner &&
+      r.controllers?.[r.side_to_move] !== "human") {
     busy = true;
     setBoardInteractive(false);
-    setStatus("AI 思考中...");
     try {
-      await fetchAiMove();
+      await driveTurns();
     } finally {
       busy = false;
       setBoardInteractive(true);
     }
+  } else if (r.phase === "playing" && !r.winner && humanSide()) {
+    const s = humanSide();
+    setStatus(`轮到${s === "player" ? "红方（下）" : "蓝方（上）"} — 点击棋子走子`);
   }
 }
 
@@ -179,7 +215,7 @@ async function renderExperience() {
 }
 
 function renderSidePanel(state) {
-  if (state.phase === "setup") {
+  if (state.phase === "setup" && state.controllers?.player === "human") {
     setupPanel.style.display = "block";
     aiPanel.style.display = "none";
     renderFormations(state.formations || [], state.setup?.preset);
@@ -341,7 +377,8 @@ async function onCellClick(r, c) {
     submitMove(selected, [r, c]);
     return;
   }
-  if (piece && piece.owner === "player") {
+  const hs = humanSide();
+  if (hs && piece && piece.owner === hs) {
     selectPiece([r, c]);
     return;
   }
@@ -427,7 +464,7 @@ async function submitMove(from, to) {
     if (r.event) {
       setStatus("结算中...");
       await animateMove(from, to, movingIcon, !!r.event.combat);
-      appendLog(formatEvent("player", r.event));
+      appendLog(formatEvent(r.event.actor, r.event));
     }
 
     state = r;
@@ -439,16 +476,13 @@ async function submitMove(from, to) {
 
     if (r.winner) {
       renderWinner(r.winner);
-      setStatus(r.winner === "player" ? "🎉 你赢了！" : "💀 AI 赢了");
+      setStatus(`${ctlName(r.winner)}（${r.winner === "player" ? "红方" : "蓝方"}）获胜`);
       return;
     }
 
-    // Now ask Jev for the AI's move — this is the slow part, shown as
-    // "AI 思考中" while the player's result is already on the board.
-    if (r.awaiting_ai) {
-      setStatus("AI 思考中...");
-      await fetchAiMove();
-    }
+    // Now drive any AI turns — the model call is the slow part, shown as
+    // "思考中" while the human's result is already on the board.
+    await driveTurns();
   } catch (e) {
     setStatus(`请求失败: ${e.message}`);
   } finally {
@@ -457,30 +491,48 @@ async function submitMove(from, to) {
   }
 }
 
-async function fetchAiMove() {
-  const r = await apiFetch("/api/ai_move", { method: "POST" }).then(r => r.json());
+// Chain AI turns until a human is to move or the game ends. Works for any
+// matchup: human-vs-AI (one move), AI-vs-AI (spectate the whole game), or
+// after a page reload that left an AI turn pending.
+async function driveTurns() {
+  while (state && state.phase === "playing" && !state.winner &&
+         state.controllers?.[state.side_to_move] !== "human") {
+    const side = state.side_to_move;
+    setStatus(`${ctlName(side)}(${side === "player" ? "红方" : "蓝方"}) 思考中...`);
+    await sleep(600);                    // let the viewer follow along
+    await fetchTurnMove();
+  }
+  if (state && !state.winner && humanSide()) {
+    const s = humanSide();
+    setStatus(`轮到${s === "player" ? "红方（下）" : "蓝方（上）"} — 点击棋子走子`);
+  }
+}
+
+async function fetchTurnMove() {
+  const r = await apiFetch("/api/turn_move", { method: "POST" }).then(r => r.json());
 
   if (!r.ok) {
-    // e.g. "no ai move pending" — never touch the board with undefined data.
     setStatus(`AI 回合异常: ${r.error || "unknown"}`);
+    state = r.controllers ? Object.assign(state || {}, r) : state;
     return;
   }
 
   if (r.ai_move) {
     const am = r.ai_move;
-    setStatus("AI 行动中...");
+    const name = ctlName(am.side);
+    setStatus(`${name} 行动中...`);
     const aiIcon = iconAt(am.event.from);
     await animateMove(am.event.from, am.event.to, aiIcon, !!am.event.combat);
-    appendLog(formatAIMove(am.decision, am.event));
+    appendLog(formatAIMove(am.decision, am.event, am.side));
     renderBoard(r.board);
-    flashCell(am.event.to);   // keep the AI's landing square lit so it's
-                              // obvious which enemy piece just moved
+    flashCell(am.event.to);   // keep the mover's landing square lit so it's
+                              // obvious which piece just moved
     renderAIDecision(am.decision);
     renderJevIO(am.decision.jev_io);
   } else if (r.ai_unavailable) {
     appendLog(`<span class="badge-ai">AI</span> 不可用: ${escapeHtml(r.ai_unavailable)}`);
     if (r.board) renderBoard(r.board);
-    setStatus("⚠️ Jev 服务暂时不可用，请稍后重试");
+    setStatus("⚠️ 决策服务暂时不可用，请稍后重试");
   } else if (r.ai_move_error) {
     appendLog(`<span class="badge-ai">AI</span> 行动失败: ${r.ai_move_error}`);
     if (r.board) renderBoard(r.board);
@@ -490,9 +542,7 @@ async function fetchAiMove() {
   renderExperience();
   if (r.winner) {
     renderWinner(r.winner);
-    setStatus(r.winner === "player" ? "🎉 你赢了！" : "💀 AI 赢了");
-  } else if (!r.ai_unavailable) {
-    setStatus("点击一个我方棋子继续");
+    setStatus(`${ctlName(r.winner)}（${r.winner === "player" ? "红方" : "蓝方"}）获胜`);
   }
 }
 
@@ -581,67 +631,69 @@ function appendLog(html) {
   logEl.prepend(li);
 }
 
+// The side whose hidden-info view this client is watching: the human's side,
+// the side to move in hotseat, or null when spectating an AI-vs-AI game
+// (then the board is god-view anyway and real types can be shown).
+function viewerSide() {
+  const c = state?.controllers || {};
+  const humans = ["player", "ai"].filter(s => c[s] === "human");
+  if (humans.length === 1) return humans[0];
+  if (humans.length === 2) return state?.side_to_move;
+  return null;
+}
+
 function formatEvent(actor, ev) {
   const badgeClass = actor === "player" ? "badge-player" : "badge-ai";
-  const label = actor === "player" ? "玩家" : "AI";
-  let text = `<span class="${badgeClass}">${label}</span> (${ev.from[0]},${ev.from[1]}) → (${ev.to[0]},${ev.to[1]})`;
+  let text = `<span class="${badgeClass}">${ctlName(actor)}</span> (${ev.from[0]},${ev.from[1]}) → (${ev.to[0]},${ev.to[1]})`;
   if (ev.combat) {
-    const { playerType, enemyLabel } = describeCombatForPlayer(actor, ev);
-    const [attackerLabel, defenderLabel] = actor === "player"
-      ? [playerType, enemyLabel]
-      : [enemyLabel, playerType];
-    text += ` · <span class="badge-combat">[战斗]</span> ${attackerLabel} vs ${defenderLabel} → ${formatOutcome(ev.outcome)}`;
+    const { atk, def } = combatLabels(ev);
+    text += ` · <span class="badge-combat">[战斗]</span> ${atk} vs ${def} → ${formatOutcome(ev.outcome)}`;
   }
   text += formatFlagIntel(ev, actor);
   return text;
 }
 
+// Combat labels as seen by this viewer: own pieces show real types, enemy
+// pieces show the bound/deduction markers the server recorded on the event
+// (">团长或雷" etc.) — spectators see the truth.
+function combatLabels(ev) {
+  const v = viewerSide();
+  if (!v) return { atk: ev.attacker_type, def: ev.defender_type };
+  if (ev.actor === v)
+    return { atk: ev.attacker_type, def: ev.seen_defender || "?" };
+  return { atk: ev.seen_attacker || "?", def: ev.defender_type };
+}
+
 // Flag-intel notices: HQ deduction and the 亮旗 rule (a dead 司令 exposes
 // its side's flag). `actor` is who made the move that produced the event.
 function formatFlagIntel(ev, actor) {
-  const me = actor === "player";
+  const v = viewerSide() || "player";
+  const me = actor === v;
+  const foe = v === "player" ? "ai" : "player";
   let t = "";
   if (ev.flag_deduced) {
     t += me
       ? ` · <span class="badge-flag">🚩 该大本营无军旗 → 推断对方军旗在 (${ev.flag_deduced[0]},${ev.flag_deduced[1]})</span>`
-      : ` · <span class="badge-flag">⚠️ AI 推断出我方军旗在 (${ev.flag_deduced[0]},${ev.flag_deduced[1]})</span>`;
+      : ` · <span class="badge-flag">⚠️ ${ctlName(actor)} 推断出${me ? "对方" : "我方"}军旗在 (${ev.flag_deduced[0]},${ev.flag_deduced[1]})</span>`;
   }
   for (const fr of ev.flags_revealed || []) {
-    t += fr.owner === "ai"
-      ? ` · <span class="badge-flag">🚩 AI 司令阵亡 → 其军旗亮出 (${fr.pos[0]},${fr.pos[1]})</span>`
-      : ` · <span class="badge-flag">⚠️ 我方司令阵亡 → 军旗被迫亮出 (${fr.pos[0]},${fr.pos[1]})</span>`;
+    t += fr.owner === foe
+      ? ` · <span class="badge-flag">🚩 ${ctlName(fr.owner)} 司令阵亡 → 其军旗亮出 (${fr.pos[0]},${fr.pos[1]})</span>`
+      : ` · <span class="badge-flag">⚠️ ${ctlName(fr.owner)} 司令阵亡 → 军旗被迫亮出 (${fr.pos[0]},${fr.pos[1]})</span>`;
   }
   return t;
 }
 
-// If the player's own piece lost this exchange, don't reveal what the
-// enemy piece actually was — just show "敌方未知" in the log.
-function describeCombatForPlayer(actor, ev) {
-  const playerType = actor === "player" ? ev.attacker_type : ev.defender_type;
-  const enemyType = actor === "player" ? ev.defender_type : ev.attacker_type;
-
-  const playerLost = actor === "player"
-    ? (ev.outcome === "defender_wins" || ev.outcome === "both_die")
-    : (ev.outcome === "attacker_wins" || ev.outcome === "both_die" || ev.outcome === "flag_taken_ai");
-
-  return {
-    playerType,
-    enemyLabel: playerLost ? "敌方未知" : enemyType,
-  };
-}
-
-// One single combined log line for the AI's move: coordinates + combat
-// result (if any) + its strategic reasoning — previously this was two
-// separate log lines (this summary AND a plain move-event line), which
-// looked like the AI had taken an extra, unexplained second move.
-function formatAIMove(decision, ev) {
-  let text = `<span class="badge-ai">AI</span> (${ev.from[0]},${ev.from[1]}) → (${ev.to[0]},${ev.to[1]})`;
+// One single combined log line for an AI move: coordinates + combat
+// result (if any) + its strategic reasoning.
+function formatAIMove(decision, ev, side = "ai") {
+  let text = `<span class="badge-ai">${ctlName(side)}</span> (${ev.from[0]},${ev.from[1]}) → (${ev.to[0]},${ev.to[1]})`;
 
   if (ev.combat) {
-    const { playerType, enemyLabel } = describeCombatForPlayer("ai", ev);
-    text += ` · <span class="badge-combat">[战斗]</span> ${enemyLabel} vs ${playerType} → ${formatOutcome(ev.outcome)}`;
+    const { atk, def } = combatLabels(ev);
+    text += ` · <span class="badge-combat">[战斗]</span> ${atk} vs ${def} → ${formatOutcome(ev.outcome)}`;
   }
-  text += formatFlagIntel(ev, "ai");
+  text += formatFlagIntel(ev, side);
 
   const labels = [];
   if (decision.purpose) labels.push(`目的: ${decision.purpose}`);
@@ -791,9 +843,11 @@ function renderAIDecision(probs) {
 function renderWinner(winner) {
   const banner = document.createElement("div");
   banner.className = `winner-banner ${winner}`;
-  banner.textContent = winner === "player"
-    ? "🎉 你赢了！读懂了 AI 的心思"
-    : "💀 AI 赢了。再来一局？";
+  const winnerCtl = ctlName(winner);
+  const winnerIsHuman = (state?.controllers || CTL)[winner] === "human";
+  banner.textContent = winnerIsHuman
+    ? `🎉 ${winnerCtl}（${winner === "player" ? "红方" : "蓝方"}）获胜！`
+    : `${winnerCtl}（${winner === "player" ? "红方" : "蓝方"}）获胜。再来一局？`;
   const existing = aiEl.querySelector(".winner-banner");
   if (existing) existing.remove();
   aiEl.prepend(banner);
@@ -805,14 +859,18 @@ function escapeHtml(s) {
   }[c]));
 }
 
-// AI backend picker — persists per tab; takes effect on the next request
-// (the header rides along on every apiFetch, so switching mid-game swaps
-// the brain at the next AI turn).
-const backendSel = document.getElementById("ai-backend");
-backendSel.value = AI_BACKEND;
-backendSel.addEventListener("change", () => {
-  sessionStorage.setItem("armyChessBackend", backendSel.value);
-  // apiFetch closes over the const AI_BACKEND — reload to swap cleanly.
+// Side-controller pickers — persist per tab; reload applies the new matchup.
+// Changing mid-game swaps that side's brain at its next turn.
+const ctlPlayerSel = document.getElementById("ctl-player");
+const ctlAiSel = document.getElementById("ctl-ai");
+ctlPlayerSel.value = CTL.player;
+ctlAiSel.value = CTL.ai;
+ctlPlayerSel.addEventListener("change", () => {
+  sessionStorage.setItem("armyChessCtlPlayer", ctlPlayerSel.value);
+  location.reload();
+});
+ctlAiSel.addEventListener("change", () => {
+  sessionStorage.setItem("armyChessCtlAi", ctlAiSel.value);
   location.reload();
 });
 

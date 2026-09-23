@@ -161,6 +161,15 @@ main {
   white-space: nowrap;
 }
 
+.ctl-sel {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
 /* Deduction markers (">团长", "同级/雷/弹", "非地雷") can be longer than a
    rank name — shrink them so they stay inside the badge. */
 .cell.revealed .piece-type {

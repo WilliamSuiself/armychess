@@ -689,6 +689,15 @@ def setup_remove(game, owner, pos):
     return {"ok": True, "pool": game["setup_pool"][owner]}
 
 
+def auto_fill_setup(game, owner):
+    """Fill an unplaced side's setup with a randomly perturbed preset —
+    used when that side is AI-controlled (no human to place pieces)."""
+    idx = random.randrange(len(PRESET_FORMATIONS))
+    lay = perturb_layout(owner, _preset_abs_layout(owner, idx))
+    game["setup"][owner] = {f"{r},{c}": t for (r, c), t in lay.items()}
+    game.setdefault("setup_preset", {"player": None, "ai": None})[owner] = idx
+
+
 def setup_start(game):
     if game.get("phase") != "setup":
         return {"ok": False, "error": "not in setup phase"}

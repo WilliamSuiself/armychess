@@ -9,23 +9,31 @@
 <div class="app">
   <header>
     <h1>🧠 军棋 × Jev · Mind Duel</h1>
-    <div class="subtitle">你 vs Jev-powered AI — 看你能不能读懂 AI 在想什么</div>
+    <div class="subtitle">军棋对战台 — 红蓝双方均可由 玩家 / Jev / Laya 控制</div>
   </header>
 
   <main>
     <section class="board-section">
       <div class="board" id="board"></div>
       <div class="legend">
-        <span class="leg own"><b>我方</b></span>
-        <span class="leg enemy"><b>对方</b></span>
+        <span class="leg own"><b>红方（下·先手）</b></span>
+        <span class="leg enemy"><b>蓝方（上）</b></span>
         <span class="leg revealed">已揭示</span>
         <span class="leg movable">可走</span>
         <span class="leg history">历史</span>
         <button id="replay-btn" class="reset-btn" style="margin-left:6px">▶ 复盘</button>
-        <label style="font-size:12px;color:#94a3b8;margin-left:8px">AI 对手:
-          <select id="ai-backend" style="background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:4px;padding:2px 4px">
-            <option value="jev">Jev（云端）</option>
-            <option value="laya">Laya（本地）</option>
+        <label style="font-size:12px;color:#86efac;margin-left:8px">红方(下·先手):
+          <select id="ctl-player" class="ctl-sel">
+            <option value="human">玩家</option>
+            <option value="jev">Jev</option>
+            <option value="laya">Laya</option>
+          </select>
+        </label>
+        <label style="font-size:12px;color:#fca5a5;margin-left:4px">蓝方(上):
+          <select id="ctl-ai" class="ctl-sel">
+            <option value="jev">Jev</option>
+            <option value="laya">Laya</option>
+            <option value="human">玩家</option>
           </select>
         </label>
         <button id="reset" class="reset-btn">重新开始</button>

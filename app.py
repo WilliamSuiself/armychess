@@ -37,6 +37,7 @@ from game import (
     setup_place,
     setup_remove,
     setup_start,
+    auto_fill_setup,
     view_for_owner,
 )
 from jev_client import JevClient
@@ -118,7 +119,9 @@ def _new_ctx():
         "exp_buffer": experience.new_buffer(),
         "exp_finalized": False,
         "last_seen": time.time(),
-        "backend": AI_BACKEND,
+        # Who controls each side: "human", "jev", or "laya".
+        # player = 下方/先手, ai = 上方/后手.
+        "controllers": {"player": "human", "ai": AI_BACKEND},
     }
 
 
@@ -137,18 +140,39 @@ def get_ctx():
         ctx = _new_ctx()
         ctx["game_id"] = gid
         GAMES[gid] = ctx
-    be = request.headers.get("X-AI-Backend")
-    if be:
-        ctx["backend"] = be
+    for side, hdr in (("player", "X-Ctl-Player"), ("ai", "X-Ctl-Ai")):
+        v = request.headers.get(hdr)
+        if v in ("human", "jev", "laya"):
+            ctx["controllers"][side] = v
     ctx["last_seen"] = time.time()
     return ctx
 
 
 def reset_ctx(ctx):
-    backend = ctx.get("backend")          # keep the chosen AI across resets
+    controllers = ctx.get("controllers")  # keep side assignments across resets
     fresh = _new_ctx()
     ctx.update(fresh)
-    ctx["backend"] = backend or AI_BACKEND
+    if controllers:
+        ctx["controllers"] = controllers
+
+
+def side_to_move(game):
+    """player moves first (turn 0); strict alternation after that."""
+    return "player" if game["turn"] % 2 == 0 else "ai"
+
+
+def board_view_for(ctx):
+    """Which board view this client should see: a human side's hidden-info
+    view, or the god view when both sides are AI (spectator mode)."""
+    game = ctx["game"]
+    if game.get("phase") == "setup":
+        return setup_board_view(game, "player")
+    human = [s for s in ("player", "ai") if ctx["controllers"].get(s) == "human"]
+    if not human:
+        return full_board_view(game)          # spectating an AI-vs-AI match
+    if len(human) == 2:
+        return view_for_owner(game, side_to_move(game))   # hotseat
+    return view_for_owner(game, human[0])
 
 
 def current_phase(game):
@@ -362,28 +386,31 @@ def game_at(game, pos):
     return game["board"].get(pos)
 
 
-def jev_choose_ai_move(ctx):
-    """Call Jev to choose AI's move. Returns dict with move + probs, or error info."""
+def model_choose_move(ctx, side):
+    """Ask the side's configured backend for a move. Returns dict with move
+    + probs, or error info. `side` is "player" or "ai"."""
     game = ctx["game"]
-    moves = enumerate_ai_moves(game)
+    moves = [(fp, tp) for fp in movable_pieces(game, side)
+             for tp in possible_moves(game, side, fp)]
     if not moves:
         return {"error": "no-legal-moves"}
-    moves = prune_moves(game, moves)
+    moves = prune_moves(game, moves, owner=side)
 
-    client = get_client(ctx.get("backend"))
+    client = get_client(ctx["controllers"].get(side))
     if client is None:
         return {"error": "backend-disabled", "moves": moves}
 
     phase = current_phase(game)
-    state = build_jev_state(game, "ai")
+    state = build_jev_state(game, side)
     hint = experience.build_hint_text(WEIGHTS, phase)
     if hint:
         state["experience_notes"] = hint
     questions = build_jev_questions()
-    questions["primary_move"]["criteria"] = build_move_choice_criteria(game, moves)
+    questions["primary_move"]["criteria"] = build_move_choice_criteria(
+        game, moves, owner=side)
 
     # Full request dump so the prompt can be reviewed/tuned from the console.
-    print(f"\n{'=' * 20} JEV REQUEST · turn {game['turn']} {'=' * 20}",
+    print(f"\n{'=' * 20} MODEL REQUEST · turn {game['turn']} side={side} {'=' * 20}",
           flush=True)
     print(json.dumps({"state": state, "questions": questions},
                      ensure_ascii=False, indent=2), flush=True)
@@ -447,12 +474,11 @@ def index():
 def get_state():
     ctx = get_ctx()
     game = ctx["game"]
-    board = setup_board_view(game, "player") if game.get("phase") == "setup" \
-        else view_for_owner(game, "player")
     state = {
         "phase": game.get("phase"),
-        "backend": ctx.get("backend", AI_BACKEND),
-        "board": board,
+        "board": board_view_for(ctx),
+        "controllers": ctx["controllers"],
+        "side_to_move": side_to_move(game) if not game.get("winner") else None,
         "turn": game["turn"],
         "winner": game["winner"],
         "last_ai_move": game["log"][-1] if game["log"] else None,
@@ -477,7 +503,8 @@ def get_moves():
     """Return list of legal moves for the player's piece at the given pos."""
     data = request.get_json(force=True) or {}
     pos = tuple(data.get("pos", [-1, -1]))
-    moves = possible_moves(get_ctx()["game"], "player", pos)
+    ctx = get_ctx()
+    moves = possible_moves(ctx["game"], side_to_move(ctx["game"]), pos)
     return jsonify({
         "from": list(pos),
         "moves": [list(m) for m in moves],
@@ -557,8 +584,12 @@ def replay_file():
         return jsonify(json.load(f))
 
 
-def _frame_label(actor, event):
-    who = "玩家" if actor == "player" else "AI"
+def _frame_label(actor, event, controllers=None):
+    if controllers:
+        who = controllers.get(actor, actor)
+        who += "（下·先手）" if actor == "player" else "（上·后手）"
+    else:
+        who = "玩家" if actor == "player" else "AI"
     s = f"{who} ({event['from'][0]},{event['from'][1]})→({event['to'][0]},{event['to'][1]})"
     if event.get("combat"):
         s += f" 战斗:{OUTCOME_ZH.get(event.get('outcome'), event.get('outcome'))}"
@@ -578,8 +609,11 @@ def append_replay_frame(ctx, label):
     })
     try:
         os.makedirs(REPLAY_DIR, exist_ok=True)
+        ctl = ctx.get("controllers", {})
         with open(_replay_path(ctx["game_id"]), "w", encoding="utf-8") as f:
-            json.dump({"frames": game["replay"], "winner": game.get("winner")},
+            json.dump({"frames": game["replay"], "winner": game.get("winner"),
+                       "meta": {"player_side": ctl.get("player"),
+                                "ai_side": ctl.get("ai")}},
                       f, ensure_ascii=False)
     except OSError:
         pass
@@ -587,29 +621,29 @@ def append_replay_frame(ctx, label):
 
 @app.route("/api/move", methods=["POST"])
 def player_move():
-    """Player move only — resolves combat locally and returns immediately.
-    The AI move is fetched separately via /api/ai_move so the player's own
-    result animates instantly instead of waiting on the Jev call."""
+    """Human move — resolves combat locally and returns immediately.
+    AI turns are fetched separately via /api/turn_move so the human's own
+    result animates instantly instead of waiting on the model call."""
     ctx = get_ctx()
     game = ctx["game"]
     if game.get("phase") == "setup":
         return jsonify({"ok": False, "error": "complete setup first"}), 400
     if game.get("phase") == "ended":
         return jsonify({"ok": False, "error": "game already ended"}), 400
-    if game.get("awaiting_ai"):
-        return jsonify({"ok": False, "error": "ai move still pending"}), 400
+    side = side_to_move(game)
+    if ctx["controllers"].get(side) != "human":
+        return jsonify({"ok": False, "error": "not a human turn"}), 400
     data = request.get_json(force=True) or {}
     from_pos = tuple(data.get("from"))
     to_pos = tuple(data.get("to"))
     if None in (from_pos, to_pos) or len(from_pos) != 2 or len(to_pos) != 2:
         return jsonify({"ok": False, "error": "invalid pos"}), 400
 
-    result = execute_move(game, "player", from_pos, to_pos)
+    result = execute_move(game, side, from_pos, to_pos)
     if not result.get("ok"):
         return jsonify(result), 400
 
-    game["awaiting_ai"] = not game["winner"]
-    append_replay_frame(ctx, _frame_label("player", result["event"]))
+    append_replay_frame(ctx, _frame_label(side, result["event"], ctx["controllers"]))
     maybe_finalize_experience(ctx)
     return jsonify({
         "ok": True,
@@ -617,60 +651,74 @@ def player_move():
         "event": result["event"],
         "turn": game["turn"],
         "phase": game.get("phase"),
-        "awaiting_ai": game["awaiting_ai"],
+        "side_to_move": side_to_move(game) if not game["winner"] else None,
+        "controllers": ctx["controllers"],
         "experience": _experience_fields(),
-        "board": view_for_owner(game, "player"),
+        "board": board_view_for(ctx),
     })
 
 
-@app.route("/api/ai_move", methods=["POST"])
-def ai_move():
-    """Ask Jev for the AI's move and execute it. Called by the frontend after
-    the player's own move has been shown."""
+@app.route("/api/turn_move", methods=["POST"])
+@app.route("/api/ai_move", methods=["POST"])   # legacy alias
+def turn_move():
+    """Execute one AI turn for whichever side is to move — the side's
+    controller (jev/laya) comes from the game config."""
     ctx = get_ctx()
     game = ctx["game"]
-    if not game.get("awaiting_ai"):
-        return jsonify({"ok": False, "error": "no ai move pending"}), 400
-    game["awaiting_ai"] = False
-
-    response = {"ok": True}
-    # Tactical priorities outrank the model: take the enemy flag if possible,
-    # else save our own flag from an immediate capture threat.
-    override = tactical_override(game, "ai")
-    if override:
-        ofp, otp, reason = override
-        ai_decision = {
-            "ok": True, "from": list(ofp), "to": list(otp),
-            "purpose": reason, "confidence": 1.0,
-            "aggression": 4, "take_risk": 0, "win_conf": 1.0,
-            "probabilities": {}, "override": True,
-        }
-    else:
-        ai_decision = jev_choose_ai_move(ctx)
-    if ai_decision.get("ok"):
-        game["last_ai_probs"] = ai_decision
-        ai_result = execute_move(game, "ai",
-                                 tuple(ai_decision["from"]),
-                                 tuple(ai_decision["to"]))
-        if ai_result.get("ok"):
-            response["ai_move"] = {
-                "decision": ai_decision,
-                "event": ai_result["event"],
-                "winner": game["winner"],
+    if game.get("phase") != "playing" or game.get("winner"):
+        return jsonify({"ok": False, "error": "no game in progress"}), 400
+    side = side_to_move(game)
+    ctrl = ctx["controllers"].get(side, "human")
+    if ctrl == "human":
+        return jsonify({"ok": False, "error": "it's a human turn"}), 400
+    if ctx.get("turn_in_flight"):
+        return jsonify({"ok": False, "error": "ai move still pending"}), 400
+    ctx["turn_in_flight"] = True
+    try:
+        response = {"ok": True}
+        # Tactical priorities outrank the model: take the enemy flag if
+        # possible, else save our own flag from an immediate capture threat.
+        override = tactical_override(game, side)
+        if override:
+            ofp, otp, reason = override
+            ai_decision = {
+                "ok": True, "from": list(ofp), "to": list(otp),
+                "purpose": reason, "confidence": 1.0,
+                "aggression": 4, "take_risk": 0, "win_conf": 1.0,
+                "probabilities": {}, "override": True,
             }
-            append_replay_frame(ctx, _frame_label("ai", ai_result["event"]))
         else:
-            response["ai_move_error"] = ai_result.get("error")
-    else:
-        # Jev unavailable — surface error to UI instead of silent random
-        response["ai_unavailable"] = ai_decision.get("error", "unknown")
+            ai_decision = model_choose_move(ctx, side)
+        if ai_decision.get("ok"):
+            game["last_ai_probs"] = ai_decision
+            ai_result = execute_move(game, side,
+                                     tuple(ai_decision["from"]),
+                                     tuple(ai_decision["to"]))
+            if ai_result.get("ok"):
+                response["ai_move"] = {
+                    "decision": ai_decision,
+                    "event": ai_result["event"],
+                    "winner": game["winner"],
+                    "side": side,
+                    "backend": ctrl,
+                }
+                append_replay_frame(
+                    ctx, _frame_label(side, ai_result["event"], ctx["controllers"]))
+            else:
+                response["ai_move_error"] = ai_result.get("error")
+        else:
+            response["ai_unavailable"] = ai_decision.get("error", "unknown")
 
-    response["turn"] = game["turn"]
-    response["winner"] = game["winner"]
-    maybe_finalize_experience(ctx)
-    response["experience"] = _experience_fields()
-    response["board"] = view_for_owner(game, "player")
-    return jsonify(response)
+        response["turn"] = game["turn"]
+        response["winner"] = game["winner"]
+        response["side_to_move"] = side_to_move(game) if not game["winner"] else None
+        response["controllers"] = ctx["controllers"]
+        maybe_finalize_experience(ctx)
+        response["experience"] = _experience_fields()
+        response["board"] = board_view_for(ctx)
+        return jsonify(response)
+    finally:
+        ctx["turn_in_flight"] = False
 
 
 @app.route("/api/reset", methods=["POST"])
@@ -753,12 +801,17 @@ def setup_save_custom_endpoint():
 def setup_start_endpoint():
     ctx = get_ctx()
     data = request.get_json(force=True) or {}
-    if data.get("backend"):
-        ctx["backend"] = data["backend"]
-    # Warm the local model in the background while the player is still
-    # setting up / making their first move — Laya's first call compiles
-    # kernels and would otherwise stall the first AI turn.
-    if ctx.get("backend") == "laya":
+    for side in ("player", "ai"):
+        v = data.get(f"{side}_controller")
+        if v in ("human", "jev", "laya"):
+            ctx["controllers"][side] = v
+    # An AI-controlled player side gets a randomly perturbed preset and the
+    # game starts immediately — nobody is placing pieces by hand.
+    if ctx["controllers"]["player"] != "human":
+        auto_fill_setup(ctx["game"], "player")
+    # Warm the local model in the background while setup completes —
+    # Laya's first call compiles kernels and would stall the first turn.
+    if "laya" in ctx["controllers"].values():
         threading.Thread(target=get_client, args=("laya",), daemon=True).start()
     result = setup_start(ctx["game"])
     if not result.get("ok"):
