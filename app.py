@@ -185,7 +185,9 @@ def maybe_finalize_experience(ctx):
     """Persist local experience stats exactly once when the game ends."""
     game = ctx["game"]
     if game.get("winner") and not ctx["exp_finalized"]:
-        experience.finalize_game(WEIGHTS, ctx["exp_buffer"], ai_won=(game["winner"] == "ai"))
+        experience.finalize_game(WEIGHTS, ctx["exp_buffer"],
+                                 ai_won=(game["winner"] == "ai"),
+                                 draw=(game["winner"] == "draw"))
         ctx["exp_finalized"] = True
 
 
@@ -252,6 +254,13 @@ def _na_score(game, move, owner, opponent):
         prev = log[-2]                          # our previous move
         if tuple(prev.get("from", ())) == fp or tuple(prev.get("to", ())) == fp:
             s += 0.7                            # keep pushing the same plan
+    for ev in reversed(log):
+        if ev["actor"] == owner:
+            # Moving a piece straight back to where it came from is the
+            # classic aimless shuffle — heavy penalty (kept, just ranked last)
+            if fp == tuple(ev["to"]) and tp == tuple(ev["from"]):
+                s -= 2.5
+            break
     s += random.random() * 0.3                  # tie-breaker jitter
     return s
 

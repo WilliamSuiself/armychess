@@ -101,9 +101,12 @@ def record_ai_turn(buffer, purpose, aggression_score, phase):
     buffer.append({"purpose": purpose, "aggression_bucket": bucket, "phase": phase})
 
 
-def finalize_game(weights, buffer, ai_won):
+def finalize_game(weights, buffer, ai_won, draw=False):
     weights["games_played"] += 1
-    weights["wins" if ai_won else "losses"] += 1
+    if draw:
+        weights["draws"] = weights.get("draws", 0) + 1
+    else:
+        weights["wins" if ai_won else "losses"] += 1
     for turn in buffer:
         phase, purpose, bucket = turn["phase"], turn["purpose"], turn["aggression_bucket"]
         pstat = weights["purpose_stats"][phase][purpose]

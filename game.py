@@ -959,7 +959,28 @@ def execute_move(game, owner, from_pos, to_pos):
 
     game["turn"] += 1
     game["log"].append(event)
+
+    # Threefold repetition → draw. The same full-board position for the same
+    # side to move three times means both sides are just shuffling.
+    if not game["winner"]:
+        h = _position_key(game)
+        hist = game.setdefault("pos_history", {})
+        hist[h] = hist.get(h, 0) + 1
+        if hist[h] >= 3:
+            game["winner"] = "draw"
+            game["phase"] = "ended"
+            event["draw"] = True
+
     return {"ok": True, "event": event, "winner": game["winner"]}
+
+
+def _position_key(game):
+    """Hashable snapshot: every live piece's square/type/owner + the side to
+    move. Piece types are fixed, so hashing them is exact."""
+    cells = tuple(sorted(
+        (r, c, p["type"], p["owner"])
+        for (r, c), p in game["board"].items() if p["alive"]))
+    return (cells, game["turn"] % 2)
 
 
 # === View for a specific owner ===================================
@@ -1098,6 +1119,11 @@ piece, never a mine.
 recent_events = the last few half-moves from YOUR perspective — use them to keep a
 coherent plan (follow up on a probe, keep pressing a weakened lane, stop wandering
 the same piece back and forth). Enemy pieces there appear as your intel markers.
+
+ANTI-SHUFFLE RULE: the same board position with the same side to move three
+times is a DRAW. Pointless back-and-forth shuffling wastes the game — keep a
+plan, and prefer a move that makes progress over one that just undoes the
+previous turn.
 
 enemy_inventory = the enemy casualty ledger: confirmed_dead (types you verified),
 uncertain_dead ("X或炸弹" — mutual destruction where you can't tell which), and

@@ -476,7 +476,8 @@ async function submitMove(from, to) {
 
     if (r.winner) {
       renderWinner(r.winner);
-      setStatus(`${ctlName(r.winner)}（${r.winner === "player" ? "红方" : "蓝方"}）获胜`);
+      setStatus(r.winner === "draw" ? "🤝 和棋（三重复局面）"
+        : `${ctlName(r.winner)}（${r.winner === "player" ? "红方" : "蓝方"}）获胜`);
       return;
     }
 
@@ -542,7 +543,8 @@ async function fetchTurnMove() {
   renderExperience();
   if (r.winner) {
     renderWinner(r.winner);
-    setStatus(`${ctlName(r.winner)}（${r.winner === "player" ? "红方" : "蓝方"}）获胜`);
+    setStatus(r.winner === "draw" ? "🤝 和棋（三重复局面）"
+      : `${ctlName(r.winner)}（${r.winner === "player" ? "红方" : "蓝方"}）获胜`);
   }
 }
 
@@ -843,6 +845,13 @@ function renderAIDecision(probs) {
 function renderWinner(winner) {
   const banner = document.createElement("div");
   banner.className = `winner-banner ${winner}`;
+  if (winner === "draw") {
+    banner.textContent = "🤝 和棋 — 同一局面重复三次";
+    const ex = aiEl.querySelector(".winner-banner");
+    if (ex) ex.remove();
+    aiEl.prepend(banner);
+    return;
+  }
   const winnerCtl = ctlName(winner);
   const winnerIsHuman = (state?.controllers || CTL)[winner] === "human";
   banner.textContent = winnerIsHuman
