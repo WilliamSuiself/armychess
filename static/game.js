@@ -316,7 +316,9 @@ function renderBoard(board) {
 
         const piece = cell.piece;
         if (piece) {
-          if (piece.owner === "player") {
+          // "own" styling follows the human viewer's side (default red) —
+          // a blue-side human must see their pieces face-up and clickable.
+          if (piece.owner === (viewerSide() || "player")) {
             div.classList.add("own");
           } else {
             div.classList.add("enemy");
@@ -548,7 +550,10 @@ async function fetchTurnMove() {
     if (r.board) renderBoard(r.board);
   }
 
-  state = r;
+  // Merge, don't replace — the turn_move payload is partial (no setup,
+  // you_are, etc.) and overwriting state would lose fields like `phase`,
+  // which once stalled the whole turn driver after a single AI move.
+  state = Object.assign(state || {}, r);
   renderExperience();
   if (r.winner) {
     renderWinner(r.winner);

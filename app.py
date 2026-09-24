@@ -744,6 +744,7 @@ def turn_move():
             response["ai_unavailable"] = ai_decision.get("error", "unknown")
 
         response["turn"] = game["turn"]
+        response["phase"] = game.get("phase")
         response["winner"] = game["winner"]
         response["side_to_move"] = side_to_move(game) if not game["winner"] else None
         response["controllers"] = ctx["controllers"]
