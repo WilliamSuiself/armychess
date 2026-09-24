@@ -55,6 +55,7 @@
       <!-- Setup panel (visible only in setup phase) -->
       <div id="setup-panel" class="setup-panel" style="display:none">
         <h2>🛠️ 布置棋盘（25子）</h2>
+        <button id="setup-start" class="start-btn">开始游戏</button>
         <p class="hint">已自动摆好一套默认阵型，可直接开始，或先切换其他阵型 / 手动调整。<br>
           切换阵型会整体替换当前摆法。<br>
           手动调整：点击棋盘上的己方棋子可移除（棋子回到棋池），再从棋池选棋子点击空位放置。</p>
@@ -68,7 +69,6 @@
         <h3>剩余棋子</h3>
         <div id="pool" class="pool"></div>
         <div id="setup-stats" class="setup-stats"></div>
-        <button id="setup-start" class="start-btn">开始游戏</button>
       </div>
 
       <!-- AI panel (visible only during play) -->
@@ -89,6 +89,6 @@
   </div>
 </div>
 
-<script src="/static/game.js"></script>
+<script src="/static/game.js?v=2"></script>
 </body>
 </html>
