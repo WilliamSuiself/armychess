@@ -698,21 +698,24 @@ def auto_fill_setup(game, owner):
     game.setdefault("setup_preset", {"player": None, "ai": None})[owner] = idx
 
 
-def setup_start(game):
+def setup_start(game, setup_owner="player"):
+    """Begin the game. `setup_owner` is the side whose formation was filled
+    by hand (must be complete); every other side gets a perturbed preset.
+    Pass setup_owner=None to auto-fill both (AI-vs-AI)."""
     if game.get("phase") != "setup":
         return {"ok": False, "error": "not in setup phase"}
 
     total = len(SETUP_POOL["player"])
-    if len(game["setup"]["player"]) != total:
-        return {"ok": False,
-                "error": f"player placed {len(game['setup']['player'])}/{total} pieces"}
-    if "军旗" not in game["setup"]["player"].values():
-        return {"ok": False, "error": "player must place a 军旗 (flag)"}
+    if setup_owner:
+        if len(game["setup"][setup_owner]) != total:
+            return {"ok": False,
+                    "error": f"{setup_owner} placed {len(game['setup'][setup_owner])}/{total} pieces"}
+        if "军旗" not in game["setup"][setup_owner].values():
+            return {"ok": False, "error": "must place a 军旗 (flag)"}
 
-    ai_preset = random.randrange(len(PRESET_FORMATIONS))
-    ai_layout = perturb_layout("ai", _preset_abs_layout("ai", ai_preset))
-    game["setup"]["ai"] = {f"{r},{c}": t for (r, c), t in ai_layout.items()}
-    game.setdefault("setup_preset", {"player": None, "ai": None})["ai"] = ai_preset
+    for side in ("player", "ai"):
+        if side != setup_owner:
+            auto_fill_setup(game, side)
 
     def _to_tuples(d):
         out = {}
@@ -728,7 +731,7 @@ def setup_start(game):
     fresh = _build_game_from_layout(layout)
     fresh["setup"] = game["setup"]
     fresh["setup_pool"] = game["setup_pool"]
-    fresh["setup_preset"] = game.get("setup_preset", {"player": None, "ai": ai_preset})
+    fresh["setup_preset"] = game.get("setup_preset", {"player": None, "ai": None})
     game.clear()
     game.update(fresh)
     return {"ok": True, "phase": game["phase"]}

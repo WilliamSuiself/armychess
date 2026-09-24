@@ -16,21 +16,21 @@
     <section class="board-section">
       <div class="board" id="board"></div>
       <div class="legend">
-        <span class="leg own"><b>红方（下·先手）</b></span>
-        <span class="leg enemy"><b>蓝方（上）</b></span>
+        <span class="leg enemy"><b>蓝方（上·先手）</b></span>
+        <span class="leg own"><b>红方（下）</b></span>
         <span class="leg revealed">已揭示</span>
         <span class="leg movable">可走</span>
         <span class="leg history">历史</span>
         <button id="replay-btn" class="reset-btn" style="margin-left:6px">▶ 复盘</button>
-        <label style="font-size:12px;color:#86efac;margin-left:8px">红方(下·先手):
-          <select id="ctl-player" class="ctl-sel">
+        <label style="font-size:12px;color:#fca5a5;margin-left:8px">蓝方(上·先手):
+          <select id="ctl-ai" class="ctl-sel">
             <option value="human">玩家</option>
             <option value="jev">Jev</option>
             <option value="laya">Laya</option>
           </select>
         </label>
-        <label style="font-size:12px;color:#fca5a5;margin-left:4px">蓝方(上):
-          <select id="ctl-ai" class="ctl-sel">
+        <label style="font-size:12px;color:#86efac;margin-left:4px">红方(下):
+          <select id="ctl-player" class="ctl-sel">
             <option value="jev">Jev</option>
             <option value="laya">Laya</option>
             <option value="human">玩家</option>

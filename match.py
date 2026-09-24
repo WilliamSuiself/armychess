@@ -85,11 +85,11 @@ def decide(game, side, client, backend):
 
 
 def play_game(first_backend, clients, rng):
-    """Play one game. `first_backend` occupies "player" (moves first).
+    """Play one game. `first_backend` occupies "ai"/blue (moves first).
     Returns a result dict."""
     side_map = {
-        "player": first_backend,
-        "ai": "laya" if first_backend == "jev" else "jev",
+        "ai": first_backend,
+        "player": "laya" if first_backend == "jev" else "jev",
     }
     game = G.new_game_for_setup()
 
@@ -105,10 +105,10 @@ def play_game(first_backend, clients, rng):
     ts = time.strftime("%Y%m%d-%H%M%S")
     replay_path = os.path.join(
         REPLAY_DIR, f"match_{ts}_{first_backend}-first.json")
-    meta = {"player_side": first_backend,
+    meta = {"player_side": side_map["player"],
             "ai_side": side_map["ai"], "started": ts}
 
-    side = "player"
+    side = "ai"
     while not game["winner"] and game["turn"] < MAX_TURNS:
         backend = side_map[side]
         t0 = time.time()

@@ -119,14 +119,19 @@ def get_jev():
 
 
 def _new_ctx():
+    game = new_game_for_setup()
+    # Pre-fill BOTH sides with presets: the human side sees a ready-made
+    # formation it can tweak (or just click 开始), AI sides get overwritten
+    # by a perturbed preset at setup_start anyway.
+    setup_apply_preset(game, "ai", random.randrange(len(all_formations())))
     return {
-        "game": new_game_for_setup(),
+        "game": game,
         "exp_buffer": experience.new_buffer(),
         "exp_finalized": False,
         "last_seen": time.time(),
         # Who controls each side: "human", "jev", or "laya".
-        # player = 下方/先手, ai = 上方/后手.
-        "controllers": {"player": "human", "ai": AI_BACKEND},
+        # ai = 蓝方/上方/先手, player = 红方/下方/后手.
+        "controllers": {"player": AI_BACKEND, "ai": "human"},
     }
 
 
@@ -162,8 +167,19 @@ def reset_ctx(ctx):
 
 
 def side_to_move(game):
-    """player moves first (turn 0); strict alternation after that."""
-    return "player" if game["turn"] % 2 == 0 else "ai"
+    """蓝方 (ai side, top) moves first; strict alternation after that."""
+    return "ai" if game["turn"] % 2 == 0 else "player"
+
+
+def setup_owner(ctx):
+    """Which side the setup UI edits — the human-controlled side (the
+    first-moving blue/ai side wins ties in hotseat). None = both AI."""
+    c = ctx["controllers"]
+    if c.get("ai") == "human":
+        return "ai"
+    if c.get("player") == "human":
+        return "player"
+    return None
 
 
 def board_view_for(ctx):
@@ -171,7 +187,7 @@ def board_view_for(ctx):
     view, or the god view when both sides are AI (spectator mode)."""
     game = ctx["game"]
     if game.get("phase") == "setup":
-        return setup_board_view(game, "player")
+        return setup_board_view(game, setup_owner(ctx) or "ai")
     human = [s for s in ("player", "ai") if ctx["controllers"].get(s) == "human"]
     if not human:
         return full_board_view(game)          # spectating an AI-vs-AI match
@@ -189,7 +205,8 @@ def current_phase(game):
 def maybe_finalize_experience(ctx):
     """Persist local experience stats exactly once when the game ends."""
     game = ctx["game"]
-    if game.get("winner") and not ctx["exp_finalized"]:
+    if (game.get("winner") and not ctx["exp_finalized"]
+            and ctx["controllers"].get("ai") != "human"):
         experience.finalize_game(WEIGHTS, ctx["exp_buffer"],
                                  ai_won=(game["winner"] == "ai"),
                                  draw=(game["winner"] == "draw"))
@@ -501,10 +518,12 @@ def get_state():
         "awaiting_ai": bool(game.get("awaiting_ai")),
     }
     if game.get("phase") == "setup":
+        owner = setup_owner(ctx)
         state["setup"] = {
-            "placed": game["setup"]["player"],
-            "pool": game["setup_pool"]["player"],
-            "preset": game.get("setup_preset", {}).get("player"),
+            "owner": owner,
+            "placed": game["setup"][owner] if owner else {},
+            "pool": game["setup_pool"][owner] if owner else [],
+            "preset": game.get("setup_preset", {}).get(owner) if owner else None,
         }
         state["formations"] = [
             {"name": f["name"], "desc": f["desc"], "custom": f.get("custom", False)}
@@ -750,13 +769,17 @@ def setup_place_endpoint():
     ptype = data.get("type")
     if pos is None or len(pos) != 2 or not ptype:
         return jsonify({"ok": False, "error": "invalid args"}), 400
-    game = get_ctx()["game"]
-    result = setup_place(game, "player", pos, ptype)
+    ctx = get_ctx()
+    game = ctx["game"]
+    owner = setup_owner(ctx)
+    if not owner:
+        return jsonify({"ok": False, "error": "no human side"}), 400
+    result = setup_place(game, owner, pos, ptype)
     if not result.get("ok"):
         return jsonify(result), 400
     result["setup"] = {
-        "placed": game["setup"]["player"],
-        "pool": game["setup_pool"]["player"],
+        "placed": game["setup"][owner],
+        "pool": game["setup_pool"][owner],
     }
     return jsonify(result)
 
@@ -767,13 +790,17 @@ def setup_remove_endpoint():
     pos = tuple(data.get("pos"))
     if pos is None or len(pos) != 2:
         return jsonify({"ok": False, "error": "invalid args"}), 400
-    game = get_ctx()["game"]
-    result = setup_remove(game, "player", pos)
+    ctx = get_ctx()
+    game = ctx["game"]
+    owner = setup_owner(ctx)
+    if not owner:
+        return jsonify({"ok": False, "error": "no human side"}), 400
+    result = setup_remove(game, owner, pos)
     if not result.get("ok"):
         return jsonify(result), 400
     result["setup"] = {
-        "placed": game["setup"]["player"],
-        "pool": game["setup_pool"]["player"],
+        "placed": game["setup"][owner],
+        "pool": game["setup_pool"][owner],
     }
     return jsonify(result)
 
@@ -790,14 +817,18 @@ def setup_preset_endpoint():
     idx = data.get("index")
     if idx is None:
         return jsonify({"ok": False, "error": "missing index"}), 400
-    game = get_ctx()["game"]
-    result = setup_apply_preset(game, "player", int(idx))
+    ctx = get_ctx()
+    game = ctx["game"]
+    owner = setup_owner(ctx)
+    if not owner:
+        return jsonify({"ok": False, "error": "no human side"}), 400
+    result = setup_apply_preset(game, owner, int(idx))
     if not result.get("ok"):
         return jsonify(result), 400
     result["setup"] = {
-        "placed": game["setup"]["player"],
-        "pool": game["setup_pool"]["player"],
-        "preset": game.get("setup_preset", {}).get("player"),
+        "placed": game["setup"][owner],
+        "pool": game["setup_pool"][owner],
+        "preset": game.get("setup_preset", {}).get(owner),
     }
     return jsonify(result)
 
@@ -806,7 +837,9 @@ def setup_preset_endpoint():
 def setup_save_custom_endpoint():
     data = request.get_json(force=True) or {}
     name = data.get("name", "")
-    result = save_current_setup_as_formation(get_ctx()["game"], "player", name)
+    ctx = get_ctx()
+    owner = setup_owner(ctx) or "player"
+    result = save_current_setup_as_formation(ctx["game"], owner, name)
     if not result.get("ok"):
         return jsonify(result), 400
     return jsonify(result)
@@ -820,15 +853,13 @@ def setup_start_endpoint():
         v = data.get(f"{side}_controller")
         if v in ("human", "jev", "laya"):
             ctx["controllers"][side] = v
-    # An AI-controlled player side gets a randomly perturbed preset and the
-    # game starts immediately — nobody is placing pieces by hand.
-    if ctx["controllers"]["player"] != "human":
-        auto_fill_setup(ctx["game"], "player")
+    # AI-controlled sides get randomly perturbed presets inside setup_start;
+    # the human side's hand-placed formation (if any) is validated there.
     # Warm the local model in the background while setup completes —
     # Laya's first call compiles kernels and would stall the first turn.
     if LAYA_ENABLED and "laya" in ctx["controllers"].values():
         threading.Thread(target=get_client, args=("laya",), daemon=True).start()
-    result = setup_start(ctx["game"])
+    result = setup_start(ctx["game"], setup_owner(ctx))
     if not result.get("ok"):
         return jsonify(result), 400
     # Frame 0 = the opening deployment (god view, all types visible).

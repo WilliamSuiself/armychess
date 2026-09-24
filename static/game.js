@@ -15,9 +15,11 @@ const GAME_ID = (() => {
 // Who controls each side: "human" | "jev" | "laya". Persisted per tab so a
 // refresh keeps the matchup; sent as headers on every request so the server
 // binds controllers to this game.
+// Defaults: you play 蓝方 (top, first move) vs Jev on 红方. Storage keys are
+// v2 so stale picks from the old red-side default don't override it.
 const CTL = {
-  player: sessionStorage.getItem("armyChessCtlPlayer") || "human",
-  ai: sessionStorage.getItem("armyChessCtlAi") || "jev",
+  player: sessionStorage.getItem("armyChessCtlPlayer2") || "jev",
+  ai: sessionStorage.getItem("armyChessCtlAi2") || "human",
 };
 
 function apiFetch(url, opts = {}) {
@@ -178,9 +180,9 @@ async function refresh() {
     if (r.ai_probs.jev_io) renderJevIO(r.ai_probs.jev_io);
   }
 
-  // 红方 is AI-controlled and the game is still in setup — auto-fill a
-  // preset formation server-side and start immediately.
-  if (r.phase === "setup" && r.controllers?.player !== "human" && !busy) {
+  // No human side at all (AI vs AI) — auto-fill formations and start the
+  // spectacle immediately. Any human side means we wait for 开始.
+  if (r.phase === "setup" && !r.setup?.owner && !busy) {
     busy = true;
     setStatus("AI 布阵中...");
     await apiFetch("/api/setup/start", {
@@ -222,7 +224,7 @@ async function renderExperience() {
 }
 
 function renderSidePanel(state) {
-  if (state.phase === "setup" && state.controllers?.player === "human") {
+  if (state.phase === "setup" && state.setup?.owner) {
     setupPanel.style.display = "block";
     aiPanel.style.display = "none";
     renderFormations(state.formations || [], state.setup?.preset);
@@ -882,11 +884,11 @@ const ctlAiSel = document.getElementById("ctl-ai");
 ctlPlayerSel.value = CTL.player;
 ctlAiSel.value = CTL.ai;
 ctlPlayerSel.addEventListener("change", () => {
-  sessionStorage.setItem("armyChessCtlPlayer", ctlPlayerSel.value);
+  sessionStorage.setItem("armyChessCtlPlayer2", ctlPlayerSel.value);
   location.reload();
 });
 ctlAiSel.addEventListener("change", () => {
-  sessionStorage.setItem("armyChessCtlAi", ctlAiSel.value);
+  sessionStorage.setItem("armyChessCtlAi2", ctlAiSel.value);
   location.reload();
 });
 
