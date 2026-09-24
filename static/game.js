@@ -42,22 +42,6 @@ function ctlName(side) {
   return { human: "玩家", jev: "Jev", laya: "Laya" }[v] || v;
 }
 
-const ICONS = {
-  "司令": "⭐",
-  "军长": "🎖️",
-  "师长": "🏅",
-  "旅长": "🎗️",
-  "团长": "🔰",
-  "营长": "🪖",
-  "连长": "🛡️",
-  "排长": "⚔️",
-  "工兵": "🔧",
-  "地雷": "💣",
-  "炸弹": "🧨",
-  "军旗": "🚩",
-  "?": "❓",
-};
-
 const POOL_TYPES = ["军旗", "司令", "军长", "师长", "旅长", "团长", "营长", "连长", "排长", "工兵", "地雷", "炸弹"];
 
 // Point centers measured in pixels on the 769x1024 board background image.
@@ -274,7 +258,7 @@ function renderPool(pool) {
     const item = document.createElement("div");
     item.className = "pool-item" + (count === 0 ? " empty" : "") +
                      (setupPieceType === t ? " selected" : "");
-    item.innerHTML = `${ICONS[t]} ${t} ×${count}`;
+    item.innerHTML = `${t} ×${count}`;
     if (count > 0) {
       item.addEventListener("click", () => {
         setupPieceType = t;
@@ -360,11 +344,8 @@ function addPieceIcon(div, type, owner) {
     // Face-down piece — a blank tile with no text. Everyone knows it's unknown.
     badge.classList.add("face-down");
   } else {
-    const icon = document.createElement("div");
-    icon.className = "piece-icon";
-    icon.textContent = ICONS[type] || "?";
-    badge.appendChild(icon);
-
+    // Text-only — no emoji icon, per design decision (readability/consistency
+    // across devices matters more than a decorative glyph).
     const label = document.createElement("div");
     label.className = "piece-type";
     label.textContent = type;

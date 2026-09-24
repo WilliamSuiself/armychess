@@ -1,12 +1,6 @@
 // Replay viewer — god-view playback of saved games (live games and
 // head-to-head matches). Reads frames from /api/replay_file.
 
-const ICONS = {
-  "司令": "⭐", "军长": "🎖️", "师长": "🏅", "旅长": "🎗️", "团长": "🔰",
-  "营长": "🪖", "连长": "🛡️", "排长": "⚔️", "工兵": "🔧", "地雷": "💣",
-  "炸弹": "🧨", "军旗": "🚩", "?": "❓",
-};
-
 // Same measured point layout as game.js (769x1024 board image).
 const COL_X = [88.5, 234.5, 384, 533.5, 682.5].map(x => x / 769 * 100);
 const ROW_Y = [77, 145, 207, 275, 343, 414, 609, 680, 748, 816, 878, 946]
@@ -49,13 +43,9 @@ function renderBoard(board) {
           const badge = document.createElement("div");
           badge.className = "piece-badge " +
             (piece.owner === "ai" ? "badge-own" : "badge-enemy");
-          const icon = document.createElement("div");
-          icon.className = "piece-icon";
-          icon.textContent = ICONS[piece.type] || "?";
           const lbl = document.createElement("div");
           lbl.className = "piece-type";
           lbl.textContent = piece.type;
-          badge.appendChild(icon);
           badge.appendChild(lbl);
           div.appendChild(badge);
         }
