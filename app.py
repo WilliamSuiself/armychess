@@ -535,7 +535,7 @@ def get_state():
 @app.route("/api/moves", methods=["POST"])
 def get_moves():
     """Return list of legal moves for the player's piece at the given pos."""
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     pos = tuple(data.get("pos", [-1, -1]))
     ctx = get_ctx()
     moves = possible_moves(ctx["game"], side_to_move(ctx["game"]), pos)
@@ -667,7 +667,7 @@ def player_move():
     side = side_to_move(game)
     if ctx["controllers"].get(side) != "human":
         return jsonify({"ok": False, "error": "not a human turn"}), 400
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     from_pos = tuple(data.get("from"))
     to_pos = tuple(data.get("to"))
     if None in (from_pos, to_pos) or len(from_pos) != 2 or len(to_pos) != 2:
@@ -765,7 +765,7 @@ def reset():
 
 @app.route("/api/setup/place", methods=["POST"])
 def setup_place_endpoint():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     pos = tuple(data.get("pos"))
     ptype = data.get("type")
     if pos is None or len(pos) != 2 or not ptype:
@@ -787,7 +787,7 @@ def setup_place_endpoint():
 
 @app.route("/api/setup/remove", methods=["POST"])
 def setup_remove_endpoint():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     pos = tuple(data.get("pos"))
     if pos is None or len(pos) != 2:
         return jsonify({"ok": False, "error": "invalid args"}), 400
@@ -814,7 +814,7 @@ def experience_endpoint():
 
 @app.route("/api/setup/preset", methods=["POST"])
 def setup_preset_endpoint():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     idx = data.get("index")
     if idx is None:
         return jsonify({"ok": False, "error": "missing index"}), 400
@@ -836,7 +836,7 @@ def setup_preset_endpoint():
 
 @app.route("/api/setup/save_custom", methods=["POST"])
 def setup_save_custom_endpoint():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "")
     ctx = get_ctx()
     owner = setup_owner(ctx) or "player"
@@ -849,7 +849,7 @@ def setup_save_custom_endpoint():
 @app.route("/api/setup/start", methods=["POST"])
 def setup_start_endpoint():
     ctx = get_ctx()
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     for side in ("player", "ai"):
         v = data.get(f"{side}_controller")
         if v in ("human", "jev", "laya"):
