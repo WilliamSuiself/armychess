@@ -81,6 +81,9 @@ WEIGHTS = experience.load()
 # network call). Each game picks its own via the X-AI-Backend header or the
 # setup payload; AI_BACKEND env sets the default.
 AI_BACKEND = os.environ.get("AI_BACKEND", "jev").lower()
+# Laya needs torch + a 322M model (~1.4GB RSS) — too heavy for small cloud
+# servers. Set LAYA_ENABLED=0 to hide the option and reject laya games.
+LAYA_ENABLED = os.environ.get("LAYA_ENABLED", "1") != "0"
 
 # Lazily-initialised clients keyed by backend name; False = failed init.
 # The lock also guards against concurrent first-use: importing transformers
@@ -93,6 +96,8 @@ def get_client(backend=None):
     backend = (backend or AI_BACKEND).lower()
     if backend not in ("jev", "laya"):
         backend = "jev"
+    if backend == "laya" and not LAYA_ENABLED:
+        return None
     with _CLIENT_LOCK:
         c = _CLIENTS.get(backend)
         if c is None:
@@ -142,7 +147,7 @@ def get_ctx():
         GAMES[gid] = ctx
     for side, hdr in (("player", "X-Ctl-Player"), ("ai", "X-Ctl-Ai")):
         v = request.headers.get(hdr)
-        if v in ("human", "jev", "laya"):
+        if v in ("human", "jev", "laya") and (v != "laya" or LAYA_ENABLED):
             ctx["controllers"][side] = v
     ctx["last_seen"] = time.time()
     return ctx
@@ -487,6 +492,7 @@ def get_state():
         "phase": game.get("phase"),
         "board": board_view_for(ctx),
         "controllers": ctx["controllers"],
+        "laya_enabled": LAYA_ENABLED,
         "side_to_move": side_to_move(game) if not game.get("winner") else None,
         "turn": game["turn"],
         "winner": game["winner"],
@@ -820,7 +826,7 @@ def setup_start_endpoint():
         auto_fill_setup(ctx["game"], "player")
     # Warm the local model in the background while setup completes —
     # Laya's first call compiles kernels and would stall the first turn.
-    if "laya" in ctx["controllers"].values():
+    if LAYA_ENABLED and "laya" in ctx["controllers"].values():
         threading.Thread(target=get_client, args=("laya",), daemon=True).start()
     result = setup_start(ctx["game"])
     if not result.get("ok"):

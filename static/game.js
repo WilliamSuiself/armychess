@@ -160,6 +160,13 @@ if (saveFormationBtn) {
 async function refresh() {
   const r = await apiFetch("/api/state").then(r => r.json());
   state = r;
+  // Laya disabled server-side (LAYA_ENABLED=0) — grey out the option.
+  if (r.laya_enabled === false) {
+    for (const sel of [ctlPlayerSel, ctlAiSel]) {
+      sel.querySelector('option[value="laya"]').disabled = true;
+      if (sel.value === "laya") sel.value = "jev";
+    }
+  }
   if (!replayMode) renderBoard(r.board);
   renderSidePanel(r);
   renderExperience();
