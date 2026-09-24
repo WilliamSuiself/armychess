@@ -7,6 +7,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -896,6 +897,95 @@ def replay_endpoint():
             except (json.JSONDecodeError, OSError):
                 frames = []
     return jsonify({"frames": frames or []})
+
+
+# ---------- Mobile API (/api/v1) — same JSON contract as /api/*, gated ----
+#
+# The web frontend is same-origin and trusted, so /api/* stays open. A
+# public app-store client is a different trust boundary: every AI turn
+# costs a real Jev API call, so we gate mobile traffic behind a per-device
+# token with a daily quota. The endpoints below are ALIASES of the exact
+# same view functions used by the web UI — no game-logic duplication, only
+# auth + quota wraps around them. See MOBILE_API.md for the full contract.
+
+DEVICE_TOKENS_PATH = os.path.join(os.path.dirname(__file__), "device_tokens.json")
+MOBILE_DAILY_QUOTA = int(os.environ.get("MOBILE_DAILY_QUOTA", "300"))
+_device_lock = threading.Lock()
+
+
+def _load_devices():
+    if not os.path.exists(DEVICE_TOKENS_PATH):
+        return {}
+    try:
+        with open(DEVICE_TOKENS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_devices(devices):
+    tmp = DEVICE_TOKENS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(devices, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, DEVICE_TOKENS_PATH)
+
+
+@app.route("/api/v1/register", methods=["POST"])
+def mobile_register():
+    """Issue a new device token. Call once on first app launch and persist
+    the token locally (e.g. Preferences on HarmonyOS) — reuse it forever."""
+    token = uuid.uuid4().hex
+    with _device_lock:
+        devices = _load_devices()
+        devices[token] = {"created": time.time(),
+                           "quota_date": time.strftime("%Y-%m-%d"),
+                           "calls_today": 0}
+        _save_devices(devices)
+    return jsonify({"ok": True, "device_token": token,
+                     "daily_quota": MOBILE_DAILY_QUOTA})
+
+
+@app.before_request
+def _mobile_gate():
+    """Auth + daily quota for /api/v1/* only. /api/* (web) is untouched."""
+    if not request.path.startswith("/api/v1/") or request.path == "/api/v1/register":
+        return None
+    token = request.headers.get("X-Device-Token")
+    if not token:
+        return jsonify({"ok": False, "error": "missing X-Device-Token"}), 401
+    with _device_lock:
+        devices = _load_devices()
+        dev = devices.get(token)
+        if dev is None:
+            return jsonify({"ok": False, "error": "unknown device token — "
+                             "call /api/v1/register first"}), 401
+        today = time.strftime("%Y-%m-%d")
+        if dev.get("quota_date") != today:
+            dev["quota_date"], dev["calls_today"] = today, 0
+        # Only the endpoint that actually triggers a Jev/Laya call counts
+        # against quota; browsing state/placing pieces is free.
+        if request.path.endswith("/turn_move"):
+            if dev["calls_today"] >= MOBILE_DAILY_QUOTA:
+                return jsonify({"ok": False, "error": "daily quota exceeded",
+                                "quota": MOBILE_DAILY_QUOTA}), 429
+            dev["calls_today"] += 1
+        devices[token] = dev
+        _save_devices(devices)
+    return None
+
+
+# Every /api/v1/<x> reuses the exact same view function registered at
+# /api/<x> — the mobile client just needs to also send
+# `X-Game-Id: mobile:<device_token>` itself so its state is isolated from
+# any web session (this mirrors how browser tabs isolate themselves today).
+for _path in ("/api/state", "/api/moves", "/api/move", "/api/turn_move",
+              "/api/reset", "/api/setup/place", "/api/setup/remove",
+              "/api/setup/preset", "/api/setup/save_custom",
+              "/api/setup/start", "/api/experience", "/api/replay"):
+    _rule = next(r for r in app.url_map.iter_rules() if r.rule == _path)
+    app.add_url_rule(f"/api/v1{_path[4:]}", endpoint=f"v1_{_rule.endpoint}",
+                      view_func=app.view_functions[_rule.endpoint],
+                      methods=list(_rule.methods))
 
 
 if __name__ == "__main__":
