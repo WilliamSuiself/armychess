@@ -351,7 +351,10 @@ function renderBoard(board) {
 
 function addPieceIcon(div, type, owner) {
   const badge = document.createElement("div");
-  badge.className = "piece-badge " + (owner === "player" ? "badge-own" : "badge-enemy");
+  // Badge colour follows the human viewer's side, not a hardcoded "player":
+  // a blue-side human sees blue tiles for their own pieces.
+  badge.className = "piece-badge " +
+    (owner === (viewerSide() || "player") ? "badge-own" : "badge-enemy");
 
   if (type === "?") {
     // Face-down piece — a blank tile with no text. Everyone knows it's unknown.
