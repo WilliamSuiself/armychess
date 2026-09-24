@@ -240,6 +240,16 @@ def _predict_score(att_type, known_label):
         return 1.5                              # face-down defender — a probe
     if known_label in RANK or known_label in IMMOVABLE or known_label == "炸弹":
         out = battle(att_type, known_label)[0]
+        if out == "both_die" and att_type == "炸弹":
+            # A bomb ALWAYS mutually destructs — but the value of that trade
+            # depends entirely on what it takes down. Torching a known 司令
+            # or 军长 is one of the best trades in the game (rank it above a
+            # plain win); torching a low-rank piece or a mine wastes a
+            # scarce, single-use resource for little gain, so it's ranked
+            # well below a normal attack — "revenge" isn't automatic, it's
+            # a value judgement.
+            vr = RANK.get(known_label, 0)        # 0 for 地雷/炸弹 (not in RANK)
+            return {9: 3.6, 8: 3.3}.get(vr, 1.0 + vr * 0.15)
         return {"attacker_wins": 3.0, "flag_taken_player": 4.0,
                 "both_die": 2.0, "defender_wins": 0.0}.get(out, 0.0)
     if isinstance(known_label, str):

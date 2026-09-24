@@ -1315,6 +1315,11 @@ def build_jev_questions():
             "criteria": {
                 "exploration": "Move to a likely-empty square to scout opponent layout",
                 "aggressive": "Attack suspected strong pieces (rank-based on what you've revealed)",
+                "bomb_trade": "Attack with 炸弹, mutually destroying it with a known/deduced "
+                    "enemy piece. Only worth it against high-value targets (司令/军长 especially) "
+                    "— don't burn a bomb on a low-rank piece just because it killed something of "
+                    "yours; a revealed attacker often isn't worth avenging immediately if a "
+                    "bigger fish is still out there.",
                 "flag_hunt": "Move toward likely flag positions to capture opponent's 军旗",
                 "defensive": "Stay near your own 军旗 / HQ to defend against flag_hunt",
                 "mine_clear": "Use 工兵 to defuse a suspected 地雷 (engineer only)",

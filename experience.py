@@ -29,7 +29,7 @@ import time
 DEFAULT_PATH = os.path.join(os.path.dirname(__file__), "weights.json")
 
 PURPOSES = [
-    "exploration", "aggressive", "flag_hunt", "defensive",
+    "exploration", "aggressive", "flag_hunt", "defensive", "bomb_trade",
     "mine_clear", "camp_retreat", "camp_hub", "rail_maneuver", "retreat",
 ]
 PHASES = ["opening", "midgame", "endgame"]
