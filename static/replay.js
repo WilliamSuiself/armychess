@@ -42,10 +42,13 @@ function renderBoard(board) {
         if (cell.rail) div.classList.add("rail");
         const piece = cell.piece;
         if (piece) {
-          div.classList.add(piece.owner === "player" ? "own" : "enemy");
+          // God-view replay has no "human side" — colour is a fixed mapping:
+          // ai/蓝方 = blue, player/红方 = red. Matches the live board, where
+          // "own"(blue)/"enemy"(red) styling happens to be the same colours.
+          div.classList.add(piece.owner === "ai" ? "own" : "enemy");
           const badge = document.createElement("div");
           badge.className = "piece-badge " +
-            (piece.owner === "player" ? "badge-own" : "badge-enemy");
+            (piece.owner === "ai" ? "badge-own" : "badge-enemy");
           const icon = document.createElement("div");
           icon.className = "piece-icon";
           icon.textContent = ICONS[piece.type] || "?";
