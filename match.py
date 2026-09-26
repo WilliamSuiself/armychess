@@ -144,6 +144,9 @@ def play_game(first_backend, clients, rng):
     save_replay(replay_path, meta, frames, game.get("winner"))
     print(f"  replay saved: {os.path.basename(replay_path)}", flush=True)
 
+    if game["winner"] == "draw":
+        return {"winner": "draw", "reason": "threefold_repetition",
+                "turns": game["turn"], "first": first_backend}
     if game["winner"]:
         return {"winner": side_map[game["winner"]], "reason": "win",
                 "turns": game["turn"], "first": first_backend}
