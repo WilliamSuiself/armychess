@@ -222,7 +222,13 @@ def maybe_finalize_experience(ctx):
 # small rule-based filter to narrow that down to a sane shortlist before
 # handing it to Jev — every capture is kept (those are the decisions that
 # matter most), plus one move per otherwise-idle piece for diversity.
-MAX_MOVE_OPTIONS = 14
+#
+# The shortlist size itself scales with game phase: the opening has 25
+# pieces and genuinely more distinct tactical options worth showing, while
+# an endgame with a handful of pieces left doesn't need — and shouldn't
+# dilute attention across — as many slots.
+MAX_MOVE_OPTIONS_BY_PHASE = {"opening": 18, "midgame": 14, "endgame": 9}
+MAX_MOVE_OPTIONS = MAX_MOVE_OPTIONS_BY_PHASE["midgame"]  # fallback default
 
 
 def enumerate_ai_moves(game):
@@ -366,6 +372,64 @@ def prune_moves(game, moves, max_options=MAX_MOVE_OPTIONS, owner="ai"):
     return keep
 
 
+def _simulate_board(game, fp, tp):
+    """Shallow board copy with the piece at fp moved to tp (capturing
+    whatever sat there). Only for one-ply lookahead in move labels below —
+    doesn't resolve combat, just answers "where do pieces sit afterward"."""
+    board = dict(game["board"])
+    piece = board.pop(fp)
+    board[tp] = piece
+    return board
+
+
+def _exposed_positions(board, revealed_to_owner, owner):
+    """Positions of OWNER's pieces on `board` that an already-revealed,
+    higher-ranked enemy piece could capture right now."""
+    opponent = "player" if owner == "ai" else "ai"
+    revealed_enemies = [
+        (pos, t) for pos, p in board.items()
+        if p["owner"] == opponent and p["alive"]
+        for t in [revealed_to_owner.get(f"{pos[0]},{pos[1]}")]
+        if t and (t in RANK or t == "炸弹")
+    ]
+    if not revealed_enemies:
+        return set()
+    temp_game = {"board": board}
+    exposed = set()
+    for pos, piece in board.items():
+        if piece["owner"] != owner or piece["type"] in IMMOVABLE:
+            continue
+        for epos, etype in revealed_enemies:
+            if pos in possible_moves(temp_game, opponent, epos) \
+                    and battle(etype, piece["type"])[0] == "attacker_wins":
+                exposed.add(pos)
+                break
+    return exposed
+
+
+def _newly_exposed_pieces(game, owner, fp, tp, already_exposed=None):
+    """Which of OWNER's other pieces would become NEWLY capturable by an
+    already-revealed, higher-ranked enemy after this move — i.e. exposed
+    now but NOT already exposed before the move (a piece that was already
+    sitting in a known enemy's line of fire isn't "caused" by every
+    unrelated move elsewhere on the board). One ply of lookahead a plain
+    per-move label can't show on its own (Jev only sees the board as it
+    currently is, never what it looks like right after its own move).
+    `already_exposed` can be precomputed once per turn (same for every
+    candidate) to avoid redoing that work per move."""
+    if already_exposed is None:
+        already_exposed = _exposed_positions(game["board"], game["revealed_to"][owner], owner)
+    sim_board = _simulate_board(game, fp, tp)
+    after = _exposed_positions(sim_board, game["revealed_to"][owner], owner)
+    newly = []
+    for pos in after:
+        if pos == tp or pos in already_exposed:
+            continue
+        piece = sim_board[pos]
+        newly.append(f"{piece['type']}({pos[0]},{pos[1]})")
+    return newly
+
+
 def build_move_choice_criteria(game, moves, owner="ai"):
     """Build a Choice criteria dict from a list of legal moves.
 
@@ -377,6 +441,8 @@ def build_move_choice_criteria(game, moves, owner="ai"):
     reveal intel (used by the head-to-head match runner for both backends).
     """
     enemy = "player" if owner == "ai" else "ai"
+    # Precompute once — same baseline for every candidate move this turn.
+    already_exposed = _exposed_positions(game["board"], game["revealed_to"][owner], owner)
     criteria = {}
     for fp, tp in moves:
         piece = game_at(game=game, pos=fp)
@@ -397,6 +463,15 @@ def build_move_choice_criteria(game, moves, owner="ai"):
                     "flag_taken_player": "夺旗获胜!",
                 }.get(predicted, predicted)
                 label += f" [attack: vs {known} → {tag}]"
+                # A bomb trade is ALWAYS "同归于尽" no matter the target —
+                # spell out whether THIS particular trade is actually worth
+                # the single-use bomb, since the tag alone can't show that.
+                if piece["type"] == "炸弹" and predicted == "both_die":
+                    score = _predict_score("炸弹", known)
+                    if score >= 3.0:
+                        label += " · 高价值换子,值得炸"
+                    elif score < 1.5:
+                        label += " · 低价值,别浪费炸弹"
             elif known:
                 label += f" [attack: vs deduced {known}]"
             else:
@@ -420,6 +495,14 @@ def build_move_choice_criteria(game, moves, owner="ai"):
         if not is_diagonal and distance > 1:
             label += " [rail slide]"
 
+        # One-ply lookahead: does this move leave another of my pieces
+        # newly capturable by an enemy piece I've already identified as
+        # stronger? Without this Jev only ever sees the board as it is
+        # now, never what it looks like right after its own move.
+        exposed = _newly_exposed_pieces(game, owner, fp, tp, already_exposed)
+        if exposed:
+            label += f" [WARNING: exposes {', '.join(exposed)} to a known stronger enemy]"
+
         criteria[f"m{len(criteria)}"] = label
     return criteria
 
@@ -436,13 +519,13 @@ def model_choose_move(ctx, side):
              for tp in possible_moves(game, side, fp)]
     if not moves:
         return {"error": "no-legal-moves"}
-    moves = prune_moves(game, moves, owner=side)
+    phase = current_phase(game)
+    moves = prune_moves(game, moves, max_options=MAX_MOVE_OPTIONS_BY_PHASE[phase], owner=side)
 
     client = get_client(ctx["controllers"].get(side))
     if client is None:
         return {"error": "backend-disabled", "moves": moves}
 
-    phase = current_phase(game)
     state = build_jev_state(game, side)
     hint = experience.build_hint_text(WEIGHTS, phase)
     if hint:

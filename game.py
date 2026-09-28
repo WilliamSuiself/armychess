@@ -1128,6 +1128,13 @@ times is a DRAW. Pointless back-and-forth shuffling wastes the game — keep a
 plan, and prefer a move that makes progress over one that just undoes the
 previous turn.
 
+material_summary = exact alive-piece counts (dead pieces are removed from
+the board, so these are certain, not estimates): your_alive_pieces,
+enemy_alive_pieces, your_strongest_alive (your own highest surviving rank),
+material_edge (positive = you have more pieces left). Use this to calibrate
+risk: ahead on material -> trade conservatively and simplify; behind -> you
+may need to take calculated risks rather than just trading evenly.
+
 enemy_inventory = the enemy casualty ledger: confirmed_dead (types you verified),
 uncertain_dead ("X或炸弹" — mutual destruction where you can't tell which), and
 remaining_by_type with ranges like "0~2存活". strongest_confirmed_alive is the
@@ -1191,6 +1198,26 @@ def build_jev_state(game, owner):
          if pc["owner"] == owner and pc["type"] == "军旗" and pc["alive"]), None)
     own_flag_exposed = bool(
         own_flag_pos and game["revealed_to"][opponent].get(own_flag_pos) == "军旗")
+
+    # --- Material summary -----------------------------------------------
+    # Dead pieces are deleted from game["board"] on death (see execute_move),
+    # so counting board entries per owner is an EXACT alive count for both
+    # sides — cheaper and more reliable than asking the model to tally
+    # your_pieces_movable/_immovable itself, and it's the "am I ahead or
+    # behind" read a human glances at in one look but an LLM otherwise has
+    # to compute from raw lists.
+    own_alive = own_movable + own_immovable
+    own_types = Counter(p["type"] for p in game["board"].values() if p["owner"] == owner)
+    own_strongest = next(
+        (t for t in sorted(RANK, key=RANK.get, reverse=True) if own_types.get(t, 0) > 0),
+        None)
+    enemy_alive_count = len(enemy_pieces_unknown) + len(enemy_pieces_revealed)
+    material_summary = {
+        "your_alive_pieces": len(own_alive),
+        "enemy_alive_pieces": enemy_alive_count,
+        "your_strongest_alive": own_strongest,
+        "material_edge": len(own_alive) - enemy_alive_count,
+    }
 
     # --- Enemy casualty ledger -----------------------------------------
     # Derived from the combat log — always from THIS side's knowledge:
@@ -1288,6 +1315,7 @@ def build_jev_state(game, owner):
         "your_flag_pos": own_flag_pos,
         "your_flag_location_exposed_to_enemy": own_flag_exposed,
         "recent_events": recent,
+        "material_summary": material_summary,
         "enemy_inventory": enemy_inventory,
         "turn": game["turn"],
         "board_size": f"{ROWS}x{COLS}",
@@ -1303,7 +1331,13 @@ def build_jev_questions():
                 "Choose ONE legal move from your movable pieces (cannot move flag or mine, "
                 "cannot move a piece stuck in an HQ). Each option is a move: 'm0' = first "
                 "legal move, 'm1' = second, etc. Stepping onto an unknown enemy square "
-                "triggers battle per the rules; a piece sitting in a camp cannot be attacked.",
+                "triggers battle per the rules; a piece sitting in a camp cannot be attacked. "
+                "Some options carry extra annotations: a bomb attack always says '同归于尽' "
+                "but is further marked '高价值换子' (worth it) or '低价值' (don't waste the "
+                "bomb) based on what it's trading for; a 'WARNING: exposes ...' tag means "
+                "taking this option leaves another of your pieces capturable by an enemy "
+                "you've already identified as stronger — weigh that cost against the option's "
+                "benefit rather than picking it blind.",
             "criteria": {},
         },
         "move_purpose": {
