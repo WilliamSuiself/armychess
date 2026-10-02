@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mind Duel · Jev 游戏大厅</title>
+<style>
+:root{
+  --bg:#0c1f17;--panel:#123527;--border:#2d5b44;--text:#e6f0e9;
+  --gold:#e8c05a;--accent:#4ade80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:ui-sans-serif,system-ui,"PingFang SC",sans-serif;
+  background:radial-gradient(circle at 50% 10%,#14422e,#0c1f17 70%);
+  color:var(--text);min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;padding:40px 20px}
+h1{font-size:30px;letter-spacing:1px}
+.sub{color:#9db8a9;font-size:14px;margin:8px 0 36px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:18px;max-width:1000px;width:100%}
+.card{background:var(--panel);border:1px solid var(--border);
+  border-radius:14px;padding:22px;text-decoration:none;color:var(--text);
+  transition:transform .12s,border-color .12s;position:relative;
+  display:flex;flex-direction:column;gap:8px}
+.card:hover{transform:translateY(-4px);border-color:var(--gold)}
+.card .icon{font-size:36px}
+.card .name{font-size:18px;font-weight:800}
+.card .desc{font-size:12px;color:#9db8a9;line-height:1.5}
+.card .go{font-size:12px;color:var(--gold);margin-top:auto}
+.card.off{opacity:.45;pointer-events:none;filter:grayscale(.6)}
+.card .tag{position:absolute;top:10px;right:10px;font-size:10px;
+  background:#7a4a12;color:#fbbf24;border-radius:4px;padding:2px 6px}
+footer{margin-top:40px;font-size:12px;color:#5f7d6c;text-align:center;
+  line-height:1.7}
+</style>
+</head>
+<body>
+<h1>🎮 Mind Duel 游戏大厅</h1>
+<div class="sub">与 Jev 对战 · 或看 AI 互搏 · 每局自动保存回放</div>
+
+<div class="grid">
+  <a class="card" href="https://doudizhu.healthdebt.online">
+    <div class="icon">🃏</div>
+    <div class="name">斗地主</div>
+    <div class="desc">三人斗地主 · 叫分抢地主 · 农民配合喂牌 · AI 可看到已出牌/未出牌清单记牌</div>
+    <div class="go">进入 →</div>
+  </a>
+  <a class="card" href="https://blackjack.healthdebt.online">
+    <div class="icon">🂡</div>
+    <div class="name">21点</div>
+    <div class="desc">三座位 vs 庄家 · 4 副牌 · Hi-Lo 流水/真数实时展示 · 加倍与停牌博弈</div>
+    <div class="go">进入 →</div>
+  </a>
+  <a class="card" href="https://poker.healthdebt.online">
+    <div class="icon">♠</div>
+    <div class="name">德州扑克</div>
+    <div class="desc">三人无限注 · 盲注轮转 · 四街下注 · 边池结算 · AI 依据动作历史做范围推理</div>
+    <div class="go">进入 →</div>
+  </a>
+  <a class="card" href="https://tetris.healthdebt.online">
+    <div class="icon">🟦</div>
+    <div class="name">俄罗斯方块</div>
+    <div class="desc">双人竞速对战 · 双方共享同一方块序列绝对公平 · 消行互赠垃圾行</div>
+    <div class="go">进入 →</div>
+  </a>
+  <a class="card" href="https://armychess.healthdebt.online">
+    <div class="icon">♟</div>
+    <div class="name">军棋</div>
+    <div class="desc">暗棋对战 · 翻翻棋规则 · 排兵布阵到残局的全流程 AI 对弈</div>
+    <div class="go">进入 →</div>
+  </a>
+  <div class="card off">
+    <div class="tag">优化中</div>
+    <div class="icon">🀄</div>
+    <div class="name">四人麻将</div>
+    <div class="desc">108 张川麻式 · 碰杠胡 · 实时活牌计数 · 牌面资源优化中，即将上线</div>
+    <div class="go">敬请期待</div>
+  </div>
+</div>
+
+<footer>
+  每个游戏内可选择座位控制者（玩家 / Jev / Laya）<br>
+  AI 决策均有 2 秒截止 + 本地启发式兜底，超时不会卡顿
+</footer>
+</body>
+</html>

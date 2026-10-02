@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>德州扑克 · 历史回放</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .layout{display:flex;gap:16px;margin-top:16px;align-items:flex-start}
+  .sidebar{width:290px;background:var(--panel);border:1px solid var(--border);
+    border-radius:10px;padding:8px;max-height:76vh;overflow-y:auto}
+  .replay-item{padding:8px;border-radius:6px;cursor:pointer;
+    border-bottom:1px solid var(--border);font-size:12px}
+  .replay-item:hover,.replay-item.active{background:#1a4a33}
+  .replay-item .meta{color:#7a988a;font-size:11px}
+  .viewer{flex:1;background:var(--panel);border:1px solid var(--border);
+    border-radius:10px;padding:14px}
+  .frame-bar{display:flex;gap:8px;align-items:center;margin-top:10px;
+    font-size:12px;flex-wrap:wrap}
+  .frame-bar input{flex:1;min-width:140px}
+  .nav-btn{background:#1d4e34;border:1px solid var(--border);color:var(--text);
+    border-radius:6px;padding:4px 12px;cursor:pointer}
+  #frame-label{margin-top:8px;font-size:13px;color:var(--gold);min-height:20px}
+  .dec-log{margin-top:10px;font-size:11px;color:#7a988a;max-height:120px;
+    overflow-y:auto;border-top:1px solid var(--border);padding-top:6px}
+  .dec-log .fall{color:#fbbf24}
+  .empty{color:#7a988a;font-size:13px;padding:30px;text-align:center}
+  .hist-log{margin-top:8px;font-size:11px;color:#7a988a}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>♠ 德州扑克 · 历史回放</h1>
+    <a href="/" style="color:#7dd3fc;font-size:13px">← 返回对战</a>
+  </header>
+  <div class="layout">
+    <div class="sidebar"><div id="list"><div class="empty">加载中…</div></div></div>
+    <div class="viewer">
+      <div class="count-bar" id="count-bar">尚未选择回放</div>
+      <div class="board-zone" style="margin-bottom:8px">
+        <div class="board-cards" id="board-cards" style="justify-content:center;display:flex;gap:6px;min-height:84px"></div>
+      </div>
+      <div id="seats"></div>
+      <div id="frame-label">尚未选择回放</div>
+      <div class="frame-bar">
+        <button class="nav-btn" id="prev">◀</button>
+        <input type="range" id="slider" min="0" max="0" value="0">
+        <button class="nav-btn" id="next">▶</button>
+        <button class="nav-btn" id="play">▶ 自动</button>
+        <span id="pos">0/0</span>
+      </div>
+      <div class="hist-log" id="hist-log"></div>
+      <div class="dec-log" id="dec-log"></div>
+    </div>
+  </div>
+</div>
+<script src="/static/replay.js"></script>
+</body>
+</html>

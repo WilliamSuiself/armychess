@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>俄罗斯方块 × Jev / Laya · Mind Duel</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🧱 俄罗斯方块 × Jev / Laya</h1>
+    <div class="subtitle">人类 / Jev / Laya 三方任意对战 —— 消行会向对方倒垫垫块</div>
+  </header>
+
+  <div class="controls-bar">
+    <label>左方：
+      <select id="ctl-left">
+        <option value="human">玩家</option>
+        <option value="jev" selected>Jev</option>
+        <option value="laya">Laya</option>
+      </select>
+    </label>
+    <span class="vs">VS</span>
+    <label>右方：
+      <select id="ctl-right">
+        <option value="human" selected>玩家</option>
+        <option value="jev">Jev</option>
+        <option value="laya">Laya</option>
+      </select>
+    </label>
+    <button id="start-btn" class="start-btn">开始新对局</button>
+    <a href="/replay" style="color:#7dd3fc;font-size:13px;margin-left:4px">历史回放 →</a>
+    <span id="laya-warning" class="laya-warning" style="display:none">⚠ 本服务器未启用 Laya</span>
+  </div>
+
+  <main>
+    <section class="boards">
+      <div class="board-col" id="col-left">
+        <div class="board-head">
+          <span class="side-name">左方</span>
+          <span class="ctl-badge" id="badge-left">–</span>
+        </div>
+        <div class="board-wrap">
+          <div class="mini-box">
+            <div class="mini-label">HOLD</div>
+            <canvas id="hold-left" width="72" height="72"></canvas>
+          </div>
+          <canvas id="board-left" width="280" height="560"></canvas>
+          <div class="mini-box">
+            <div class="mini-label">NEXT</div>
+            <canvas id="next-left" width="72" height="216"></canvas>
+          </div>
+        </div>
+        <div class="stats" id="stats-left"></div>
+        <div class="garbage-bar" id="garbage-left"></div>
+        <div class="ai-panel" id="ai-panel-left" style="display:none">
+          <div class="ai-thinking" id="ai-thinking-left"></div>
+          <div class="ai-decision" id="ai-decision-left"></div>
+        </div>
+      </div>
+
+      <div class="board-col" id="col-right">
+        <div class="board-head">
+          <span class="side-name">右方</span>
+          <span class="ctl-badge" id="badge-right">–</span>
+        </div>
+        <div class="board-wrap">
+          <canvas id="board-right" width="280" height="560"></canvas>
+          <div class="mini-box">
+            <div class="mini-label">HOLD</div>
+            <canvas id="hold-right" width="72" height="72"></canvas>
+          </div>
+          <div class="mini-box">
+            <div class="mini-label">NEXT</div>
+            <canvas id="next-right" width="72" height="216"></canvas>
+          </div>
+        </div>
+        <div class="stats" id="stats-right"></div>
+        <div class="garbage-bar" id="garbage-right"></div>
+        <div class="ai-panel" id="ai-panel-right" style="display:none">
+          <div class="ai-thinking" id="ai-thinking-right"></div>
+          <div class="ai-decision" id="ai-decision-right"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="winner-overlay" class="winner-overlay" style="display:none">
+    <div class="winner-card">
+      <div id="winner-text">游戏结束</div>
+      <div class="winner-actions">
+        <button id="close-winner-btn" class="ghost-btn">关闭</button>
+        <a id="view-replay-btn" class="ghost-btn" href="/replay">查看本局回放</a>
+        <button id="rematch-btn" class="start-btn">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p class="help">
+      玩家操作：← → 移动 · ↑ 旋转 · Z 逆时针旋转 · ↓ 软降 · 空格 硬降 · C 暂存(Hold)
+    </p>
+  </footer>
+</div>
+<script src="/static/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>斗地主 × Jev / Laya · Mind Duel</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🃏 斗地主 × Jev / Laya</h1>
+    <div class="subtitle">三人斗地主 —— 每个座位可独立选择 玩家 / Jev / Laya</div>
+  </header>
+
+  <div class="controls-bar">
+    <label>座位0：<select id="ctl-0"><option value="jev" selected>Jev</option><option value="human">玩家</option><option value="laya">Laya</option></select></label>
+    <label>座位1：<select id="ctl-1"><option value="human" selected>玩家</option><option value="jev">Jev</option><option value="laya">Laya</option></select></label>
+    <label>座位2：<select id="ctl-2"><option value="jev" selected>Jev</option><option value="human">玩家</option><option value="laya">Laya</option></select></label>
+    <button id="start-btn" class="start-btn">开始新对局</button>
+    <a href="/replay" style="color:#7dd3fc;font-size:13px;margin-left:4px">历史回放 →</a>
+    <span id="laya-warning" class="laya-warning" style="display:none">⚠ 本服务器未启用 Laya</span>
+  </div>
+
+  <div class="table">
+    <!-- 顶左 / 顶右 两个对手位 -->
+    <div class="seat-top" id="seat-left">
+      <div class="seat-head">
+        <span class="seat-name" id="name-left">座位</span>
+        <span class="badge" id="badge-left"></span>
+        <span class="role-tag" id="role-left"></span>
+        <span class="count-tag" id="count-left"></span>
+      </div>
+      <div class="opp-hand" id="hand-left"></div>
+      <div class="ai-panel" id="ai-left"></div>
+    </div>
+    <div class="seat-top" id="seat-right">
+      <div class="seat-head">
+        <span class="seat-name" id="name-right">座位</span>
+        <span class="badge" id="badge-right"></span>
+        <span class="role-tag" id="role-right"></span>
+        <span class="count-tag" id="count-right"></span>
+      </div>
+      <div class="opp-hand" id="hand-right"></div>
+      <div class="ai-panel" id="ai-right"></div>
+    </div>
+
+    <!-- 中央信息区 -->
+    <div class="center-zone">
+      <div class="bottom-cards" id="bottom-cards"></div>
+      <div class="played-area">
+        <div class="played-slot" id="played-left"><div class="played-label"></div><div class="played-cards"></div></div>
+        <div class="played-slot" id="played-bottom"><div class="played-label"></div><div class="played-cards"></div></div>
+        <div class="played-slot" id="played-right"><div class="played-label"></div><div class="played-cards"></div></div>
+      </div>
+      <div class="turn-hint" id="turn-hint"></div>
+    </div>
+
+    <!-- 自己（底部） -->
+    <div class="seat-bottom" id="seat-bottom">
+      <div class="seat-head">
+        <span class="seat-name" id="name-bottom">座位</span>
+        <span class="badge" id="badge-bottom"></span>
+        <span class="role-tag" id="role-bottom"></span>
+        <span class="count-tag" id="count-bottom"></span>
+      </div>
+      <div class="my-hand" id="hand-bottom"></div>
+      <div class="ai-panel" id="ai-bottom"></div>
+      <div class="action-bar">
+        <div id="bid-bar" style="display:none">
+          <button class="bid-btn" data-bid="0">不叫</button>
+          <button class="bid-btn" data-bid="1">1分</button>
+          <button class="bid-btn" data-bid="2">2分</button>
+          <button class="bid-btn" data-bid="3">3分</button>
+        </div>
+        <div id="play-bar" style="display:none">
+          <button id="btn-play" class="start-btn">出牌</button>
+          <button id="btn-pass" class="ghost-btn">不出</button>
+          <button id="btn-hint" class="ghost-btn">提示</button>
+          <button id="btn-clear" class="ghost-btn">重选</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="winner-overlay" class="winner-overlay" style="display:none">
+    <div class="winner-card">
+      <div id="winner-text">游戏结束</div>
+      <div class="winner-actions">
+        <button id="close-winner-btn" class="ghost-btn">关闭</button>
+        <a id="view-replay-btn" class="ghost-btn" href="/replay">查看本局回放</a>
+        <button id="rematch-btn" class="start-btn">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p class="help">叫分阶段点按钮叫地主 · 出牌阶段点击手牌选中后点"出牌" · "提示"循环浏览可行打法</p>
+  </footer>
+</div>
+<script src="/static/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header { text-align: center; margin-bottom: 12px; }
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.subtitle { color: #94a3b8; font-size: 13px; }
+
+.controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0 22px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.controls-bar select {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.vs { color: #f472b6; font-weight: 700; }
+
+.start-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.start-btn:hover { opacity: 0.9; }
+
+.laya-warning { color: #fbbf24; font-size: 12px; }
+
+main { margin-bottom: 20px; }
+
+.boards {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.board-col {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  /* Must fit canvas(280) + 2 mini-boxes(~82 each) + gaps, or the mini-boxes/canvas
+     overflow this box and visually bleed into the other column (they used to,
+     at the old 330px). */
+  width: 512px;
+  flex: 0 0 auto;
+  overflow: hidden; /* safety net: never let contents bleed into the next column */
+}
+
+.board-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.side-name { font-weight: 700; color: #cbd5e1; }
+
+.ctl-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.25);
+  color: #a5b4fc;
+}
+
+.board-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+#board-left, #board-right {
+  background: #0b1120;
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-radius: 4px;
+}
+
+.mini-box {
+  background: #0b1120;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  padding: 4px;
+  text-align: center;
+}
+
+.mini-label { font-size: 10px; color: #64748b; margin-bottom: 2px; }
+
+.stats {
+  display: flex;
+  justify-content: space-around;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 10px;
+}
+.stats b { color: #e2e8f0; }
+
+.garbage-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(248, 113, 113, 0.15);
+  margin-top: 8px;
+  overflow: hidden;
+}
+.garbage-bar > .fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f87171, #fbbf24);
+  transition: width 0.2s;
+}
+
+.ai-panel {
+  margin-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  padding-top: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  min-height: 40px;
+}
+
+.ai-thinking {
+  color: #fbbf24;
+  font-size: 12px;
+}
+
+.ai-decision {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.ai-decision .lbl { color: #7dd3fc; }
+.ai-decision .purpose { color: #86efac; }
+.ai-decision .metric { color: #cbd5e1; }
+
+.winner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.winner-card {
+  background: #1e293b;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 12px;
+  padding: 28px 40px;
+  text-align: center;
+}
+#winner-text { font-size: 22px; margin-bottom: 16px; color: #facc15; font-weight: 700; }
+
+.winner-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+}
+
+.ghost-btn {
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.ghost-btn:hover { border-color: #94a3b8; color: #f1f5f9; }
+
+footer { text-align: center; }
+.help { color: #64748b; font-size: 12px; }

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四人麻将 × Jev / Laya · Mind Duel</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🀄 四人麻将 × Jev / Laya</h1>
+    <div class="subtitle">108张 · 无字牌无吃 · 碰杠胡 · 流局换庄胜者连庄</div>
+  </header>
+
+  <div class="controls-bar">
+    <label>座位0：<select id="ctl-0"><option value="jev" selected>Jev</option><option value="human">玩家</option><option value="laya">Laya</option></select></label>
+    <label>座位1：<select id="ctl-1"><option value="human" selected>玩家</option><option value="jev">Jev</option><option value="laya">Laya</option></select></label>
+    <label>座位2：<select id="ctl-2"><option value="jev" selected>Jev</option><option value="human">玩家</option><option value="laya">Laya</option></select></label>
+    <label>座位3：<select id="ctl-3"><option value="jev" selected>Jev</option><option value="human">玩家</option><option value="laya">Laya</option></select></label>
+    <button id="start-btn" class="start-btn">开始新对局</button>
+    <a href="/replay" style="color:#7dd3fc;font-size:13px;margin-left:4px">历史回放 →</a>
+    <span id="laya-warning" class="laya-warning" style="display:none">⚠ 本服务器未启用 Laya</span>
+  </div>
+
+  <div class="table-mj">
+    <!-- 对家（上方） -->
+    <div class="seat-side seat-across" id="seat-top">
+      <div class="seat-head" style="justify-content:center"><span class="seat-name" id="name-top"></span><span class="badge" id="badge-top"></span><span class="count-tag" id="info-top"></span></div>
+      <div class="mj-melds" id="melds-top" style="justify-content:center"></div>
+      <div class="mj-concealed" id="hand-top" style="justify-content:center"></div>
+      <div class="ai-panel" id="ai-top" style="text-align:center"></div>
+    </div>
+
+    <!-- 中盘：左家弃牌 | 中央 | 右家弃牌 -->
+    <div class="board-row">
+      <div class="seat-side seat-left">
+        <div class="seat-head"><span class="seat-name" id="name-left"></span><span class="badge" id="badge-left"></span><span class="count-tag" id="info-left"></span></div>
+        <div class="mj-melds" id="melds-left"></div>
+        <div class="mj-concealed" id="hand-left"></div>
+        <div class="ai-panel" id="ai-left"></div>
+        <div class="dz-col" id="disc-left"></div>
+      </div>
+      <div class="dz-center">
+        <div class="wall-info" id="wall-info"></div>
+        <div class="turn-hint" id="turn-hint"></div>
+        <div class="dz-col disc-across" id="disc-top"></div>
+      </div>
+      <div class="seat-side seat-right">
+        <div class="seat-head"><span class="seat-name" id="name-right"></span><span class="badge" id="badge-right"></span><span class="count-tag" id="info-right"></span></div>
+        <div class="mj-melds" id="melds-right"></div>
+        <div class="mj-concealed" id="hand-right"></div>
+        <div class="ai-panel" id="ai-right"></div>
+        <div class="dz-col" id="disc-right" style="justify-content:flex-end"></div>
+      </div>
+    </div>
+    <div class="dz-row" id="disc-bottom"></div>
+
+    <div class="live-panel">
+      <div class="live-title">🧮 活牌计数（除你手牌外的剩余张数）</div>
+      <div class="live-grid" id="live-grid"></div>
+    </div>
+
+    <!-- 下家（玩家） -->
+    <div class="seat-side seat-bottom">
+      <div class="seat-head" style="justify-content:center"><span class="seat-name" id="name-bottom"></span><span class="badge" id="badge-bottom"></span><span class="count-tag" id="info-bottom"></span></div>
+      <div class="mj-melds" id="melds-bottom" style="justify-content:center"></div>
+      <div class="mj-hand-mine" id="hand-bottom"></div>
+      <div class="ai-panel" id="ai-bottom" style="text-align:center"></div>
+      <div class="action-bar" id="claim-bar" style="display:none"></div>
+    </div>
+  </div>
+
+  <div id="winner-overlay" class="winner-overlay" style="display:none">
+    <div class="winner-card">
+      <div id="winner-text">对局结束</div>
+      <div class="winner-actions">
+        <button id="close-winner-btn" class="ghost-btn">关闭</button>
+        <a id="view-replay-btn" class="ghost-btn" href="/replay">查看本局回放</a>
+        <button id="rematch-btn" class="start-btn">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <footer><p class="help">点手牌打出 · 碰/杠/胡在别家打出后可操作 · 明杠暗杠加杠都会补摸一张 · 牌图来自 FluffyStuff/riichi-mahjong-tiles（公有领域）</p></footer>
+</div>
+<script src="/static/game.js"></script>
+</body>
+</html>

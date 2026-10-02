@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>复盘 · 俄罗斯方块 × Jev / Laya</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .replay-layout { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
+  .replay-list {
+    width: 260px; max-height: 640px; overflow-y: auto;
+    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 12px; padding: 10px; font-size: 12px;
+  }
+  .replay-list h3 { margin: 4px 6px 10px; font-size: 13px; color: #94a3b8; }
+  .replay-item {
+    padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; cursor: pointer;
+    background: #1e293b; border: 1px solid #334155; line-height: 1.6; color: #cbd5e1;
+  }
+  .replay-item:hover { border-color: #64748b; }
+  .replay-item.active { border-color: #f59e0b; background: #292018; }
+  .replay-item .sub { color: #64748b; font-size: 11px; }
+  .replay-main { flex: 0 0 auto; }
+  .replay-title { font-size: 13px; color: #94a3b8; margin-bottom: 10px; text-align: center; }
+  .replay-title b { color: #f8fafc; }
+  .replay-boards { display: flex; gap: 20px; justify-content: center; }
+  .replay-board-col { text-align: center; }
+  .replay-board-col .tag { font-size: 12px; color: #a5b4fc; margin-bottom: 6px; }
+  .replay-board-col canvas {
+    background: #0b1120; border: 2px solid rgba(148, 163, 184, 0.25); border-radius: 4px;
+  }
+  .replay-board-col .stats { font-size: 12px; color: #94a3b8; margin-top: 6px; }
+  .replay-bar {
+    display: flex; align-items: center; gap: 8px; margin-top: 14px; justify-content: center;
+  }
+  .replay-btn {
+    background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  .replay-btn:hover { border-color: #64748b; }
+  #rp-slider { width: 260px; }
+  .replay-label { font-size: 12px; color: #94a3b8; min-width: 220px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🧱 复盘回放</h1>
+    <div class="subtitle">选择左侧对局回放 · <a href="/" style="color:#7dd3fc">← 返回对战</a></div>
+  </header>
+
+  <main>
+    <div class="replay-layout">
+      <div class="replay-list"><h3>对局记录</h3><div id="files"></div></div>
+      <section class="replay-main">
+        <div class="replay-title" id="replay-title">← 选择一局开始回放</div>
+        <div class="replay-boards">
+          <div class="replay-board-col">
+            <div class="tag" id="tag-left">左方</div>
+            <canvas id="board-left" width="280" height="560"></canvas>
+            <div class="stats" id="stats-left"></div>
+          </div>
+          <div class="replay-board-col">
+            <div class="tag" id="tag-right">右方</div>
+            <canvas id="board-right" width="280" height="560"></canvas>
+            <div class="stats" id="stats-right"></div>
+          </div>
+        </div>
+        <div class="replay-bar">
+          <button id="rp-autoplay" class="replay-btn">▶ 自动播放</button>
+          <button id="rp-prev" class="replay-btn">◀ 上一步</button>
+          <input id="rp-slider" type="range" min="0" max="0" value="0">
+          <button id="rp-next" class="replay-btn">下一步 ▶</button>
+        </div>
+        <div class="replay-label" id="rp-label" style="text-align:center;margin-top:8px"></div>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="/static/replay.js"></script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+:root{
+  --bg:#0c1f17;--panel:#123527;--border:#2d5b44;--text:#e6f0e9;
+  --gold:#e8c05a;--accent:#4ade80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:ui-sans-serif,system-ui,"PingFang SC",sans-serif;
+  background:radial-gradient(circle at 50% 20%,#14422e,#0c1f17 70%);
+  color:var(--text);min-height:100vh}
+.app{max-width:1100px;margin:0 auto;padding:14px}
+header{display:flex;align-items:baseline;gap:12px}
+h1{font-size:22px}
+.subtitle{color:#9db8a9;font-size:13px}
+.controls-bar{margin:10px 0;display:flex;align-items:center;gap:10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;flex-wrap:wrap;font-size:13px}
+.controls-bar select{background:#0b2419;color:var(--text);
+  border:1px solid var(--border);border-radius:6px;padding:3px 6px}
+.start-btn{background:linear-gradient(180deg,#e8c05a,#d4a437);color:#1a1405;
+  border:none;border-radius:8px;padding:6px 16px;font-weight:700;
+  font-size:14px;cursor:pointer}
+.start-btn:hover{filter:brightness(1.08)}
+.laya-warning{color:#fbbf24;font-size:12px}
+
+.count-bar{background:#0b2419;border:1px solid var(--border);border-radius:10px;
+  padding:8px 14px;font-size:13px;margin-bottom:10px}
+.count-bar b{color:var(--gold)}
+.count-note{color:#7a988a;font-size:12px;margin-left:8px}
+
+.table{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.dealer-zone{width:100%;background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:10px;min-height:120px}
+.dealer-hand{display:flex;gap:6px;justify-content:center;min-height:70px;
+  margin-top:6px}
+.seat-top{flex:1 1 320px;background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:10px;min-height:150px}
+.seat-bottom{flex:1 1 100%;background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:10px}
+.seat-head{display:flex;align-items:center;gap:8px;font-size:13px}
+.seat-name{font-weight:700}
+.badge{font-size:11px;color:#7a988a}
+.badge:has(+ .count-tag){}
+.count-tag{color:var(--gold);font-size:12px}
+.turn-hint{text-align:center;font-size:13px;color:var(--gold);min-height:18px}
+
+.my-hand,.opp-hand{display:flex;gap:6px;justify-content:center;min-height:84px;
+  margin-top:8px;flex-wrap:wrap}
+.opp-hand{min-height:70px}
+
+.card{width:58px;height:84px;background:#f8fafc;border-radius:8px;
+  border:1px solid #94a3b8;position:relative;color:#0f172a;
+  box-shadow:0 2px 4px rgba(0,0,0,.3);flex-shrink:0}
+.card-sm{width:44px;height:64px}
+.card .rk{position:absolute;top:5px;left:7px;font-weight:800;font-size:16px}
+.card .st{position:absolute;bottom:5px;right:7px;font-size:17px}
+.card-sm .rk{font-size:13px;top:4px;left:5px}
+.card-sm .st{font-size:14px;bottom:4px;right:5px}
+.card.red{color:#dc2626}
+.card.back{background:repeating-linear-gradient(45deg,#164e63,#164e63 6px,#155e75 6px,#155e75 12px);
+  border:1px solid #0e7490}
+
+.ai-panel{margin-top:8px;font-size:12px;color:#9db8a9;min-height:0}
+.ai-thinking{color:var(--gold)}
+.ai-decision{margin-top:2px}
+
+.action-bar{display:flex;justify-content:center;gap:10px;margin-top:12px;
+  flex-wrap:wrap}
+#bet-bar,#act-bar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.bid-btn,.act-btn{background:#1d4e34;color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:8px 18px;font-size:14px;cursor:pointer;font-weight:600}
+.bid-btn:hover,.act-btn:hover{background:#256b46}
+.act-btn:disabled{opacity:.3;cursor:default}
+.act-btn[data-act="double"]{border-color:var(--gold);color:var(--gold)}
+
+.winner-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;z-index:50}
+.winner-card{background:#f1f5f9;border-radius:14px;padding:34px 46px;
+  color:#0f172a;text-align:center}
+#winner-text{font-size:22px;font-weight:800;margin-bottom:16px}
+.winner-actions{display:flex;gap:10px;justify-content:center}
+.ghost-btn{background:transparent;border:1px solid #cbd5e1;color:#334155;
+  border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer;
+  text-decoration:none;font-size:14px;display:inline-flex;align-items:center}
+.ghost-btn:hover{background:#e2e8f0}
+.winner-actions .start-btn{font-size:14px;padding:8px 16px}
+footer{margin-top:14px}
+.help{color:#7a988a;font-size:12px;text-align:center}
+
+.card .rk2{font-size:13px;top:6px}
+.card-sm .rk2{font-size:11px;top:4px;left:4px}

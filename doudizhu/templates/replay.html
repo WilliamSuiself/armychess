@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>斗地主 · 历史回放</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🃏 斗地主 · 历史回放</h1>
+    <div class="subtitle"><a href="/" style="color:#7dd3fc">← 返回对战</a></div>
+  </header>
+  <div class="replay-layout">
+    <div class="file-list" id="files"></div>
+    <div class="replay-main">
+      <div id="replay-title" style="text-align:center;color:#cbd5e1;font-size:14px;min-height:20px"></div>
+      <div class="rp-controls">
+        <button id="rp-prev" class="ghost-btn">◀ 上一步</button>
+        <input type="range" id="rp-slider" min="0" max="0" value="0">
+        <button id="rp-next" class="ghost-btn">下一步 ▶</button>
+        <button id="rp-autoplay" class="start-btn">▶ 自动播放</button>
+      </div>
+      <div class="rp-label" id="rp-label"></div>
+      <div class="rp-hands">
+        <div class="rp-seat"><div class="seat-head"><b id="tag-0">座位0</b><span class="role-tag" id="role-0"></span></div><div class="rp-hand" id="hand-0"></div></div>
+        <div class="rp-seat"><div class="seat-head"><b id="tag-1">座位1</b><span class="role-tag" id="role-1"></span></div><div class="rp-hand" id="hand-1"></div></div>
+        <div class="rp-seat"><div class="seat-head"><b id="tag-2">座位2</b><span class="role-tag" id="role-2"></span></div><div class="rp-hand" id="hand-2"></div></div>
+      </div>
+      <div style="text-align:center;margin-top:10px;color:#fbbf24;font-size:13px" id="rp-last"></div>
+      <div class="played-cards" id="rp-last-cards" style="display:flex;justify-content:center;gap:2px;margin-top:6px"></div>
+    </div>
+  </div>
+</div>
+<script src="/static/replay.js"></script>
+</body>
+</html>

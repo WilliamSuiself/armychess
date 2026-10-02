@@ -1,0 +1,6 @@
+flask>=3.0
+requests>=2.31
+gunicorn>=21.2
+# Optional, only needed if you want the local Laya backend:
+# laya==0.3.4
+# torch
