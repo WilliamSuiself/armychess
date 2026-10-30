@@ -1,0 +1,95 @@
+/* Chinese Checkers × Jev/Laya — shared dark theme (same family as blackjack). */
+:root {
+  --bg: #0b1020;
+  --panel: #131a2e;
+  --line: #24314f;
+  --text: #e2e8f0;
+  --dim: #94a3b8;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --accent: #38bdf8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "PingFang SC", "Segoe UI", sans-serif;
+}
+.app { max-width: 900px; margin: 0 auto; padding: 16px; }
+header h1 { margin: 0; font-size: 22px; }
+.subtitle { color: var(--dim); font-size: 13px; margin-top: 2px; }
+
+.controls-bar {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; margin: 12px 0; font-size: 14px;
+}
+.controls-bar select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 8px;
+}
+.start-btn {
+  background: var(--accent); color: #04202c; border: none;
+  border-radius: 8px; padding: 7px 16px; font-weight: 600; cursor: pointer;
+}
+.start-btn:hover { filter: brightness(1.1); }
+
+.table { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.seat-top, .seat-bottom { width: 100%; max-width: 760px; }
+.seat-head {
+  display: flex; gap: 10px; align-items: baseline; font-size: 14px;
+  padding: 4px 8px;
+}
+.seat-name { font-weight: 700; }
+.badge { color: #fbbf24; font-size: 12px; }
+.count-tag { color: var(--dim); font-size: 12px; }
+.ai-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 10px; font-size: 13px; color: var(--dim); min-height: 30px;
+  margin: 4px 8px;
+}
+.turn-hint { font-size: 14px; color: var(--accent); min-height: 20px; }
+.io-toggle { color: var(--accent); font-size: 12px; margin-left: 6px; }
+.io-pre { background: #080c17; border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px; font-size: 11px; max-height: 320px; overflow: auto;
+  white-space: pre-wrap; word-break: break-word; margin-top: 6px; }
+
+.board-wrap { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 8px; overflow-x: auto; }
+
+.hole { fill: #1e293b; stroke: #334155; stroke-width: 1.5; cursor: pointer; }
+.hole:hover { fill: #334155; }
+
+.peg circle:first-child { stroke: #0b1020; stroke-width: 2.5; }
+.peg.red circle:first-child { fill: var(--red); }
+.peg.blue circle:first-child { fill: var(--blue); }
+.peg .glint { fill: rgba(255,255,255,.35); }
+.peg.own { cursor: pointer; }
+.peg.own:hover circle:first-child { stroke: #facc15; }
+
+.hint {
+  fill: rgba(250, 204, 21, .35); stroke: #facc15; stroke-width: 2;
+  cursor: pointer;
+}
+.hint-path {
+  fill: none; stroke: rgba(250,204,21,.5); stroke-width: 3;
+  stroke-dasharray: 6 5; pointer-events: none;
+}
+
+.action-bar { padding: 6px 8px; font-size: 13px; color: var(--dim); }
+
+.winner-overlay {
+  position: fixed; inset: 0; background: rgba(4, 8, 20, .8);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.winner-card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 28px 36px; text-align: center; font-size: 20px;
+}
+.winner-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: center; }
+.ghost-btn {
+  background: transparent; border: 1px solid var(--line); color: var(--text);
+  border-radius: 8px; padding: 7px 14px; cursor: pointer; text-decoration: none;
+  font-size: 14px; display: inline-block;
+}
+footer { margin-top: 14px; }
+.help { color: var(--dim); font-size: 12px; text-align: center; }

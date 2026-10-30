@@ -8,3 +8,14 @@ custom_formations.json
 replays/
 match_results.json
 device_tokens.json
+
+# Self-evolution artifacts (chinese-checkers/self_evolve.py): generated state
+# from an unattended process, not hand-authored code — kept out of git so
+# the repo always ships the vetted DEFAULT_WEIGHTS baseline. The live
+# server's "current champion" is operational state, not a commit.
+weights_champion.json
+evolution_history/
+
+# macOS metadata junk
+.DS_Store
+._*

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中国跳棋 × Jev / Laya · 星际竞速</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>⬡ 中国跳棋 × Jev / Laya</h1>
+    <div class="subtitle">六角星 121 孔 · 红蓝对角 · 10 颗棋子竞速到对面</div>
+  </header>
+
+  <div class="controls-bar">
+    <label>红方（下方）：<select id="ctl-0">
+      <option value="human" selected>玩家</option>
+      <option value="jev">Jev</option>
+      <option value="laya">Laya</option></select></label>
+    <label>蓝方（上方）：<select id="ctl-1">
+      <option value="jev" selected>Jev</option>
+      <option value="human">玩家</option>
+      <option value="laya">Laya</option></select></label>
+    <button id="start-btn" class="start-btn">开始新对局</button>
+    <a href="replay" style="color:#7dd3fc;font-size:13px;margin-left:4px">历史回放 →</a>
+    <span id="laya-warning" class="laya-warning" style="display:none">⚠ 本服务器未启用 Laya</span>
+  </div>
+
+  <div class="table">
+    <div class="seat-top">
+      <div class="seat-head"><span class="seat-name" id="name-top"></span>
+        <span class="badge" id="badge-top"></span>
+        <span class="count-tag" id="info-top"></span></div>
+      <div class="ai-panel" id="ai-top"></div>
+    </div>
+
+    <div class="turn-hint" id="turn-hint"></div>
+
+    <div class="board-wrap">
+      <svg id="board" viewBox="0 0 760 860" width="760" height="860"></svg>
+    </div>
+
+    <div class="seat-bottom">
+      <div class="ai-panel" id="ai-bottom"></div>
+      <div class="seat-head" style="justify-content:center">
+        <span class="seat-name" id="name-bottom"></span>
+        <span class="badge" id="badge-bottom"></span>
+        <span class="count-tag" id="info-bottom"></span></div>
+      <div class="action-bar"><span id="move-hint">点击己方棋子选择走法</span></div>
+    </div>
+  </div>
+
+  <div id="winner-overlay" class="winner-overlay" style="display:none">
+    <div class="winner-card">
+      <div id="winner-text">对局结束</div>
+      <div class="winner-actions">
+        <button id="close-winner-btn" class="ghost-btn">关闭</button>
+        <a id="view-replay-btn" class="ghost-btn" href="replay">查看本局回放</a>
+        <button id="rematch-btn" class="start-btn">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <footer><p class="help">每回合动一颗子：单步走到相邻空孔，或连续跳过相邻棋子（被跳的子不移除）· 10 颗全部进入对面三角区即胜</p></footer>
+</div>
+<script>
+const SERVER_HOLES = {{ holes | tojson }};
+</script>
+<script src="static/game.js"></script>
+</body>
+</html>

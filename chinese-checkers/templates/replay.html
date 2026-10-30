@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中国跳棋 · 对局回放</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>⬡ 中国跳棋 · 回放</h1>
+    <div class="subtitle"><a href="./" style="color:#7dd3fc">← 返回对局</a></div>
+  </header>
+
+  <div class="controls-bar">
+    <select id="replay-select" style="min-width:340px"></select>
+    <button id="load-btn" class="start-btn">载入</button>
+    <button id="prev-btn" class="ghost-btn">◀ 上一步</button>
+    <button id="next-btn" class="ghost-btn">下一步 ▶</button>
+    <button id="auto-btn" class="ghost-btn">自动播放</button>
+    <span id="frame-info" style="color:#94a3b8;font-size:13px"></span>
+  </div>
+
+  <div class="board-wrap">
+    <svg id="board" viewBox="0 0 760 860" width="760" height="860"></svg>
+  </div>
+  <div class="ai-panel" id="frame-label">选择一局回放</div>
+</div>
+<script>
+const SERVER_HOLES = {{ holes | tojson }};
+</script>
+<script src="static/replay.js"></script>
+</body>
+</html>
