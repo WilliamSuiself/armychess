@@ -646,7 +646,7 @@ def list_replays():
     files = []
     try:
         for name in os.listdir(REPLAY_DIR):
-            if not name.endswith(".json"):
+            if not name.endswith(".json") or name == os.path.basename(CTL_MAP_FILE):
                 continue
             path = os.path.join(REPLAY_DIR, name)
             try:
