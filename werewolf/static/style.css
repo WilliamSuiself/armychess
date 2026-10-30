@@ -1,0 +1,81 @@
+:root{
+  --bg:#1a0d0d;--panel:#2e1616;--border:#5b2d2d;--text:#f0e6e6;
+  --gold:#e8c05a;--wolf:#ef4444;--good:#4ade80;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:ui-sans-serif,system-ui,"PingFang SC",sans-serif;
+  background:radial-gradient(circle at 50% 20%,#4a1414,#1a0d0d 70%);
+  color:var(--text);min-height:100vh}
+.app{max-width:1100px;margin:0 auto;padding:14px}
+header{display:flex;align-items:baseline;gap:12px}
+h1{font-size:22px}
+.subtitle{color:#d0a8a8;font-size:13px}
+.controls-bar{margin:10px 0;display:flex;align-items:center;gap:8px;
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;flex-wrap:wrap;font-size:12px}
+.controls-bar select{background:#240a0a;color:var(--text);
+  border:1px solid var(--border);border-radius:6px;padding:3px 4px;font-size:12px}
+.controls-bar label{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:#d0a8a8}
+.start-btn{background:linear-gradient(180deg,#e8c05a,#d4a437);color:#1a1405;
+  border:none;border-radius:8px;padding:6px 16px;font-weight:700;
+  font-size:14px;cursor:pointer}
+.start-btn:hover{filter:brightness(1.08)}
+.laya-warning{color:#fbbf24;font-size:12px}
+
+.status-bar{background:#240a0a;border:1px solid var(--border);border-radius:10px;
+  padding:8px 14px;font-size:13px;margin-bottom:10px;color:var(--gold);font-weight:600}
+
+.seat-roster{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px}
+.seat-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:8px;text-align:center;font-size:12px;position:relative}
+.seat-card.dead{opacity:.4}
+.seat-card.acting{box-shadow:0 0 0 2px var(--gold)}
+.seat-card .num{font-weight:800;font-size:16px}
+.seat-card .ctl{color:#d0a8a8;font-size:11px}
+.seat-card .role{margin-top:4px;font-weight:700;font-size:12px}
+.seat-card .role.wolf{color:var(--wolf)}
+.seat-card .role.good{color:var(--good)}
+.seat-card .you-tag{position:absolute;top:2px;right:4px;font-size:10px;color:var(--gold)}
+.seat-card .thinking{color:var(--gold);font-size:11px;margin-top:2px}
+
+.main-area{display:flex;gap:10px}
+.transcript{flex:2;background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:12px;height:440px;overflow-y:auto;font-size:13px;
+  display:flex;flex-direction:column;gap:6px}
+.transcript .line{padding:4px 8px;border-radius:6px;background:rgba(255,255,255,.03)}
+.transcript .line.system{color:var(--gold);font-style:italic}
+.transcript .line.speech{background:rgba(255,255,255,.06)}
+.transcript .line .who{font-weight:700;margin-right:4px}
+
+.side-panel{flex:1;display:flex;flex-direction:column;gap:10px;min-width:260px}
+.your-role-box{background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:12px;font-size:13px}
+.your-role-box .role-name{font-size:18px;font-weight:800;color:var(--gold)}
+
+.action-box{background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:12px;font-size:13px;flex:1}
+.action-box h3{font-size:13px;margin-bottom:8px;color:var(--gold)}
+.opt-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.opt-btn{background:#4c1d1d;color:var(--text);border:1px solid var(--border);
+  border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-weight:600}
+.opt-btn:hover{background:#672424}
+.opt-btn.selected{background:var(--gold);color:#1a1405;border-color:var(--gold)}
+.form-row{margin-bottom:8px}
+.form-row label{display:block;font-size:11px;color:#d0a8a8;margin-bottom:3px}
+.submit-btn{background:linear-gradient(180deg,#e8c05a,#d4a437);color:#1a1405;
+  border:none;border-radius:8px;padding:7px 16px;font-weight:700;cursor:pointer;width:100%}
+.submit-btn:disabled{opacity:.4;cursor:default}
+
+.winner-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;z-index:50}
+.winner-card{background:#f1f5f9;border-radius:14px;padding:34px 46px;
+  color:#0f172a;text-align:center;max-width:500px}
+#winner-text{font-size:18px;font-weight:800;margin-bottom:16px;white-space:pre-line}
+.winner-actions{display:flex;gap:10px;justify-content:center}
+.ghost-btn{background:transparent;border:1px solid #cbd5e1;color:#334155;
+  border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer;
+  text-decoration:none;font-size:14px;display:inline-flex;align-items:center}
+.ghost-btn:hover{background:#e2e8f0}
+.winner-actions .start-btn{font-size:14px;padding:8px 16px}
+footer{margin-top:14px}
+.help{color:#d0a8a8;font-size:12px;text-align:center}

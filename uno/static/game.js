@@ -19,7 +19,7 @@
 
   function newMatch() {
     const controllers = [0, 1, 2, 3].map(i => document.getElementById(`ctl-${i}`).value);
-    api("/api/new_match", {method: "POST", body: JSON.stringify({controllers})})
+    api("api/new_match", {method: "POST", body: JSON.stringify({controllers})})
       .then(s => { if (s.ok === false) { alert(s.error); return; }
                    winnerDismissedFor = null; render(s); hideWinner(); });
   }
@@ -40,7 +40,7 @@
     document.getElementById("winner-text").textContent =
       `座位${state.winner} (${names[ctl(state.winner)] || "?"}) 获胜！总分 ${state.seats[state.winner].score}`;
     const rb = document.getElementById("view-replay-btn");
-    rb.href = state.replay_file ? `/replay?file=${encodeURIComponent(state.replay_file)}` : "/replay";
+    rb.href = state.replay_file ? `replay?file=${encodeURIComponent(state.replay_file)}` : "replay";
     document.getElementById("winner-overlay").style.display = "flex";
   }
 
@@ -90,7 +90,7 @@
     btn.addEventListener("click", () => {
       document.getElementById("color-picker").style.display = "none";
       if (!pendingWildCard) return;
-      api("/api/action", {method: "POST",
+      api("api/action", {method: "POST",
         body: JSON.stringify({type: "play", card: pendingWildCard, color: btn.dataset.color})})
         .then(render);
       pendingWildCard = null;
@@ -99,12 +99,12 @@
 
   function playCard(code) {
     if (code === "W" || code === "W4") { askColor(code); return; }
-    api("/api/action", {method: "POST", body: JSON.stringify({type: "play", card: code})})
+    api("api/action", {method: "POST", body: JSON.stringify({type: "play", card: code})})
       .then(render);
   }
 
   document.getElementById("draw-btn").addEventListener("click", () => {
-    api("/api/action", {method: "POST", body: JSON.stringify({type: "draw"})}).then(render);
+    api("api/action", {method: "POST", body: JSON.stringify({type: "draw"})}).then(render);
   });
 
   // Visual layout is always "you at the bottom" (slot 0), going clockwise
@@ -180,7 +180,7 @@
   }
 
   async function poll() {
-    try { render(await api("/api/state")); } catch (e) { /* transient */ }
+    try { render(await api("api/state")); } catch (e) { /* transient */ }
   }
   setInterval(poll, 400);
   poll();

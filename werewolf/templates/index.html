@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>狼人杀 × Jev / Laya · Mind Duel</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🐺 狼人杀 × Jev / Laya</h1>
+    <div class="subtitle">6人局 · 2狼/预言家/女巫/2平民 · 语言博弈实况</div>
+  </header>
+
+  <div class="controls-bar" id="controls-bar">
+    <!-- seat selectors injected by JS -->
+    <button id="start-btn" class="start-btn">开始新对局</button>
+    <a href="replay" style="color:#7dd3fc;font-size:13px;margin-left:4px">历史回放 →</a>
+    <span id="laya-warning" class="laya-warning" style="display:none">⚠ 本服务器未启用 Laya</span>
+  </div>
+
+  <div class="status-bar" id="status-bar"></div>
+
+  <div class="seat-roster" id="seat-roster"></div>
+
+  <div class="main-area">
+    <div class="transcript" id="transcript"></div>
+    <div class="side-panel">
+      <div class="your-role-box" id="your-role-box"></div>
+      <div class="action-box" id="action-box"></div>
+    </div>
+  </div>
+
+  <div id="winner-overlay" class="winner-overlay" style="display:none">
+    <div class="winner-card">
+      <div id="winner-text">对局结束</div>
+      <div class="winner-actions">
+        <button id="close-winner-btn" class="ghost-btn">关闭</button>
+        <a id="view-replay-btn" class="ghost-btn" href="replay">查看本局回放</a>
+        <button id="rematch-btn" class="start-btn">再来一局</button>
+      </div>
+    </div>
+  </div>
+
+  <footer><p class="help">夜晚：狼人共同选择击杀目标 · 预言家查验一人 · 女巫每晚最多用一瓶药 · 白天按座位顺序发言后投票放逐一人</p></footer>
+</div>
+<script src="static/game.js"></script>
+</body>
+</html>

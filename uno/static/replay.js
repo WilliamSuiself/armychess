@@ -5,7 +5,7 @@
   const slider = document.getElementById("slider");
   let frames = [], current = 0, timer = null, decisions = [];
 
-  const list = await (await fetch("/api/replays")).json();
+  const list = await (await fetch("api/replays")).json();
   const files = list.files || [];
   if (!files.length) listEl.innerHTML = '<div class="empty">暂无回放文件</div>';
 
@@ -88,7 +88,7 @@
   slider.addEventListener("input", () => { stopPlay(); renderFrame(+slider.value); });
 
   async function load(name) {
-    const data = await (await fetch("/api/replay_file?name=" + encodeURIComponent(name))).json();
+    const data = await (await fetch("api/replay_file?name=" + encodeURIComponent(name))).json();
     frames = data.frames || []; decisions = data.decisions || [];
     slider.max = Math.max(frames.length - 1, 0);
     renderFrame(0);
