@@ -16,6 +16,11 @@ device_tokens.json
 weights_champion.json
 evolution_history/
 
+# Learned endgame value model (chinese-checkers/experience.py): fit from
+# replays/ on whichever machine trains it (local test data vs. the
+# server's real game history differ), same reasoning as weights_champion.json.
+value_model.json
+
 # macOS metadata junk
 .DS_Store
 ._*

@@ -13,18 +13,39 @@ import time
 
 import rules
 import weights as _weights_mod
+import experience as _experience_mod
 
 # Loaded once at import time; self_evolve.py writes weights_champion.json and
 # a process restart (or explicit reload_weights()) is what picks up a newly
 # promoted generation — same "swap a config file, not the code" pattern used
 # for the champion/challenger promotion gate.
 W = _weights_mod.load()
+VALUE_COEFFS = _experience_mod.load_coeffs()
 
 
 def reload_weights():
     global W
     W = _weights_mod.load()
     return W
+
+
+def reload_value_model():
+    global VALUE_COEFFS
+    VALUE_COEFFS = _experience_mod.load_coeffs()
+    return VALUE_COEFFS
+
+
+def _learned_value(pegs, player):
+    """Predicted moves-remaining-to-finish, fit on real completed games
+    (experience.py) -- NOT the same signal as the short-horizon net-progress
+    scoring above. Used only as a tie-breaker/injection check below: it can
+    "see" that a move which looks like negative progress right now (step
+    away from the target to set up a jump chain) actually reduces the real
+    distance to finishing, which net-progress alone cannot express."""
+    target = rules.target_zone(player)
+    start = rules.START_ZONE[player]
+    return _experience_mod.predict(VALUE_COEFFS,
+                                    _experience_mod.featurize(pegs, target, start))
 
 MAX_MOVE_OPTIONS = 14
 OPENING_HALF_MOVES = 14    # ~7 moves each; while most pegs are still home
@@ -220,12 +241,43 @@ def build_state(game, player):
         if rear_best:
             pruned = pruned[:MAX_MOVE_OPTIONS - 1] + \
                      [max(rear_best, key=lambda t: scored2(t[0]))]
+
+    # Bridge-move injection. net_progress/two_ply_progress are short-horizon
+    # (see/1-2 plies) and systematically exclude "step a peg AWAY from the
+    # target to set up a jump chain" moves -- they always score as negative
+    # progress one ply out, even when they're exactly the move needed to
+    # unstick an endgame where the straight-line path is blocked. Found by
+    # testing real no-interference endgames: the hand-scored shortlist can
+    # plateau with every option in it scoring worse than doing nothing,
+    # while a move outside the shortlist (checked via the value model
+    # trained on real completed games, experience.py) would actually reduce
+    # the predicted moves-to-finish. Only trust that signal and pay the
+    # O(legal moves) scan cost when the current shortlist isn't helping.
+    cur_value = _learned_value(game.pegs[player], player)
+    best_pruned_value = min(
+        (_learned_value(_apply_path(game, player, t[0]).pegs[player], player)
+         for t in pruned), default=cur_value)
+    bridge_path = None
+    if best_pruned_value >= cur_value - 0.5:
+        best_alt_value, best_alt_path = cur_value, None
+        for mv in legal:
+            if any(t[0] == mv for t in pruned):
+                continue
+            v = _learned_value(_apply_path(game, player, mv).pegs[player], player)
+            if v < best_alt_value:
+                best_alt_value, best_alt_path = v, mv
+        if best_alt_path is not None and best_alt_value < cur_value - 0.5:
+            bridge_path = best_alt_path
+            pruned = pruned[:MAX_MOVE_OPTIONS - 1] + \
+                     [(bridge_path, _net_progress(player, bridge_path))]
+
     candidates = []
     for i, (path, net) in enumerate(pruned):
         _combined, best_next = two_ply_progress(game, player, path)
         candidates.append({
             "opening": opening_score(game, player, path),
             "is_rear": path[0] == rear,
+            "is_bridge": path == bridge_path,
             "id": f"m{i}",
             "move": rules.path_label(path),
             "path": path,
@@ -254,7 +306,9 @@ def build_state(game, player):
             c["move"] + f" 净前进{c['net']}" +
             (f" 🪜此后可再跳净进{c['ladder_bonus']}" if c["ladder_bonus"] >= 1.5 else "") +
             (" 📖开局" if c["opening"] > 0 else "") +
-            (" 🔗护尾" if c["is_rear"] else "")
+            (" 🔗护尾" if c["is_rear"] else "") +
+            (" 🧩搭桥(净前进为负/零，但为后续跳跃链让路，实测能解开卡死局面)"
+             if c["is_bridge"] else "")
             for c in candidates],
         "candidate_ids": [c["id"] for c in candidates],
         "recent_moves": [
@@ -291,7 +345,13 @@ def build_questions(state):
                 "them while the opening guidance applies. A '🔗护尾' tag marks "
                 "the TRAILING (rear-most) peg's move — in the mid/late game "
                 "the last peg to arrive decides the game, so keep it "
-                "advancing and keep a teammate within jump range of it.",
+                "advancing and keep a teammate within jump range of it. A "
+                "'🧩搭桥' tag marks a move with negative/zero immediate net "
+                "progress that a value model (fit on real finished games) "
+                "predicts still REDUCES your true moves-to-finish — take it "
+                "when no other candidate actually helps; this is specifically "
+                "for positions where everything else is a dead end and only "
+                "a 'step back to open a jump chain' move actually unsticks it.",
             "criteria": criteria,
         },
         "intent": {
@@ -351,10 +411,29 @@ def move_fallback(game, player, w=None):
         rear_moves = [p for p in legal if p[0] == rear]
         if rear_moves:
             pre.append(max(rear_moves, key=score_1ply))
-    return max(pre, key=lambda p: two_ply_progress(game, player, p, w)[0] +
+    final_score = lambda p: (two_ply_progress(game, player, p, w)[0] +
                (W["fallback_leave_zone_bonus"] if p[0] in zone else 0) +
                opening_score(game, player, p, w) +
                formation_score(game, player, p, w))
+    best = max(pre, key=final_score)
+
+    # Same bridge-move rescue as build_state's candidate injection: if even
+    # the 2-ply-ranked best option doesn't reduce the real moves-to-finish
+    # estimate (trained on completed games), it means every short-horizon
+    # option is a dead end -- scan the full legal set for a move that does
+    # and take that instead. Rare in the mid-game (there's almost always
+    # SOME forward option), but this is exactly the deterministic fallback
+    # path that gets used when the endgame is genuinely stuck.
+    cur_value = _learned_value(game.pegs[player], player)
+    if _learned_value(_apply_path(game, player, best).pegs[player], player) >= cur_value - 0.5:
+        best_alt_value, best_alt = cur_value, None
+        for mv in legal:
+            v = _learned_value(_apply_path(game, player, mv).pegs[player], player)
+            if v < best_alt_value:
+                best_alt_value, best_alt = v, mv
+        if best_alt is not None and best_alt_value < cur_value - 0.5:
+            return best_alt
+    return best
 
 
 # ---------------- decision pipeline ----------------
